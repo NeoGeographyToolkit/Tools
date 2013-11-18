@@ -1,5 +1,5 @@
 #===============================================================================
-# Configuration
+# Project information
 
 project(ngtTools)
 cmake_minimum_required(VERSION 2.8)
@@ -13,15 +13,43 @@ set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
 set(PACKAGE_BUGREPORT "scott.t.mcmichael@nasa.gov")
 
 
-#TODO: Remove this, the find functions should handle it!
-set(BASESYSTEM_INSTALL_DIR "/home/smcmich1/repo/BaseSystem")
-set(VISIONWORKBENCH_ROOT   "/home/smcmich1/repo/visionworkbench/build")
-set(StereoPipeline_ROOT    "/home/smcmich1/repo/StereoPipeline/build")
+#===============================================================================
+# Configuration options
 
-# Custom options
+
+# --- Directory paths ---
+set(BASESYSTEM_INSTALL_DIR "" CACHE FILEPATH "Path to AutoTools installation directory")
+if(NOT BASESYSTEM_INSTALL_DIR)
+  message(SEND_ERROR "You need to set BASESYSTEM_INSTALL_DIR: ${BASESYSTEM_INSTALL_DIR}")
+endif()
+
+set(VISIONWORKBENCH_INSTALL_DIR "" CACHE FILEPATH "Path to Vision Workbench installation directory")
+if(NOT VISIONWORKBENCH_INSTALL_DIR)
+  message(SEND_ERROR "You need to set VISIONWORKBENCH_INSTALL_DIR: ${VISIONWORKBENCH_INSTALL_DIR}")
+endif()
+
+set(STEREOPIPELINE_INSTALL_DIR "" CACHE FILEPATH "Path to Stereo Pipeline installation directory")
+if(NOT STEREOPIPELINE_INSTALL_DIR)
+  message(SEND_ERROR "You need to set STEREOPIPELINE_INSTALL_DIR: ${STEREOPIPELINE_INSTALL_DIR}")
+endif()
+
+message("Base System path      = ${BASESYSTEM_INSTALL_DIR}")
+message("Vision Workbench path = ${VISIONWORKBENCH_INSTALL_DIR}")
+message("Stereo Pipeline path  = ${STEREOPIPELINE_INSTALL_DIR}")
+
+# Copy the nice input variable names to the messy internal names
+set(VISIONWORKBENCH_ROOT   ${VISIONWORKBENCH_INSTALL_DIR})
+set(StereoPipeline_ROOT    ${STEREOPIPELINE_INSTALL_DIR})
+
+#set(BASESYSTEM_INSTALL_DIR "/home/smcmich1/repo/BaseSystem")
+#set(VISIONWORKBENCH_ROOT   "/home/smcmich1/repo/visionworkbench/build")
+#set(StereoPipeline_ROOT    "/home/smcmich1/repo/StereoPipeline/build")
+
+
+# --- Custom options ---
 option(BUILD_SHARED_LIBS "Produce shared libraries." TRUE)
 
-
+# --- Fixed options ---
 set(Boost_USE_STATIC_LIBS   OFF)
 set(Boost_USE_MULTITHREADED ON )
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
