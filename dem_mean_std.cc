@@ -65,7 +65,7 @@ int main( int argc, char *argv[] ){
   try {
     ImageView<double> mean_dem, std_dev_dem, count_dem;
     GeoReference georef;
-    float nodata_val = numeric_limits<double>::quiet_NaN();
+    double nodata_val = numeric_limits<double>::quiet_NaN();
 
     if (argc <= 1){
       vw_throw(ArgumentErr() << "Missing input files.\n"
@@ -78,7 +78,7 @@ int main( int argc, char *argv[] ){
       std::cout << "Reading: " << curr_file << std::endl;
 
       DiskImageResourceGDAL in_rsrc(curr_file);
-      float curr_nodata_val = numeric_limits<double>::quiet_NaN();
+      double curr_nodata_val = numeric_limits<double>::quiet_NaN();
       if ( in_rsrc.has_nodata_read() ) {
         curr_nodata_val = in_rsrc.nodata_read();
         vw_out() << "\tFound input nodata value: " << curr_nodata_val << std::endl;
