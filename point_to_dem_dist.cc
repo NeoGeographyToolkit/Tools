@@ -67,14 +67,14 @@ struct Options: asp::BaseOptions {
   // Input
   string csv, dem;
   // Output
-  //string output_prefix;
+  string output_prefix;
 };
 
 void handle_arguments( int argc, char *argv[], Options& opt ) {
   
   po::options_description general_options("");
-  //general_options.add_options()
-  //  ("output-prefix,o", po::value(&opt.output_prefix), "Specify the output prefix.");
+  general_options.add_options()
+    ("output-prefix,o", po::value(&opt.output_prefix), "Specify the output prefix.");
 
   general_options.add( asp::BaseOptionsDescription(opt) );
 
@@ -98,11 +98,11 @@ void handle_arguments( int argc, char *argv[], Options& opt ) {
     vw_throw( ArgumentErr() << "Missing input files.\n"
               << usage << general_options );
 
-  //if ( opt.output_prefix.empty() ) {
-  //  opt.output_prefix =
-  //    fs::basename(opt.csv) + "__" + fs::basename(opt.dem);
-  // }
-  //asp::create_out_dir(opt.output_prefix);
+  if ( opt.output_prefix.empty() ) {
+    opt.output_prefix =
+      fs::basename(opt.csv) + "__" + fs::basename(opt.dem);
+  }
+  asp::create_out_dir(opt.output_prefix);
 
 }
 
@@ -113,7 +113,7 @@ void null_check(const char* token, string const& line){
 
 void load_csv(string const& file_name,
               cartography::Datum const& datum,
-              vector<Vector3> & llh
+              vector<Vector3> & lon_lat_height
               ){
   
   const int bufSize = 1024;
@@ -151,7 +151,7 @@ void load_csv(string const& file_name,
     }
     is_first_line = false;
 
-    llh.push_back(Vector3(lon, lat, height));
+    lon_lat_height.push_back(Vector3(lon, lat, height));
   }
 
 }
@@ -195,25 +195,29 @@ int main( int argc, char *argv[] ){
        )/4.0;
     double mean_dem_lon = mean_dem_lonlat[0];
       
-    vector<Vector3> llh;
-    load_csv(opt.csv, georef.datum(), llh);
-    std::cout << "Loaded: " << llh.size() << " points from " << opt.csv << "."
-              << std::endl;
+    vector<Vector3> lon_lat_height;
+    load_csv(opt.csv, georef.datum(), lon_lat_height);
+    std::cout << "Loaded: " << lon_lat_height.size() << " points from "
+              << opt.csv << "." << std::endl;
 
-    vector<double> valid_errors;
-    for (int i = 0; i < (int)llh.size(); i++){
+    double nan = numeric_limits<double>::quiet_NaN();
+    vector<double> valid_errors, all_errors(lon_lat_height.size(), nan);
+    for (int i = 0; i < (int)lon_lat_height.size(); i++){
 
-      Vector3 p = llh[i];
-      p[0] += 360.0*round((mean_dem_lon - p[0])/360.0); // 360 deg adjustment
+      Vector3 llh = lon_lat_height[i];
+      llh[0] += 360.0*round((mean_dem_lon - llh[0])/360.0); // 360 deg adjustment
       
-      Vector2 pix = georef.lonlat_to_pixel(subvector(p, 0, 2));
+      Vector2 pix = georef.lonlat_to_pixel(subvector(llh, 0, 2));
       double c = pix[0], r = pix[1];
       if (c < 0 || c >= dem.cols()-1 || r < 0 ||
           r >= dem.rows()-1 || dem(c, r) == nodata) continue;
 
       PixelMask<float> v = masked_dem_interp(c, r);
       if (! is_valid(v)) continue;
-      valid_errors.push_back(std::abs(p[2] - v.child()));
+      double err = std::abs(llh[2] - v.child());
+      valid_errors.push_back(err);
+
+      all_errors[i] = err;
     }
 
     int len = valid_errors.size();
@@ -222,15 +226,27 @@ int main( int argc, char *argv[] ){
 
     sort(valid_errors.begin(), valid_errors.end());
     if (len == 0) return 0;
-    
+
+    // Stats
     double p16 = valid_errors[std::min(len-1, (int)round(len*0.16))];
     double p50 = valid_errors[std::min(len-1, (int)round(len*0.50))];
     double p84 = valid_errors[std::min(len-1, (int)round(len*0.84))];
     vw_out() << "Error percentiles: "
              << " 16%: " << p16 << ", 50%: " << p50 << ", 84%: " << p84 << endl;
-    
     double mean = calc_mean(valid_errors, len);
     vw_out() << "Mean error: " << mean << std::endl;
+
+    // Save the errors
+    std::string output_file = opt.output_prefix + "-errors.csv";
+    std::cout << "Writing: " << output_file << std::endl;
+    ofstream outfile( output_file.c_str() );
+    outfile.precision(16);
+    outfile << "# latitude,longitude,height above datum (meters),vertical error(meters)" << endl;
+    for (int i = 0; i < (int)lon_lat_height.size(); i++){
+      Vector3 llh = lon_lat_height[i];
+      outfile << llh[1] << ',' << llh[0] << ',' << llh[2]
+              << "," << all_errors[i] << endl;
+    }
     
   } ASP_STANDARD_CATCHES;
   
