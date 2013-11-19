@@ -199,10 +199,8 @@ target_link_libraries(lola_compare  ${VISIONWORKBENCH_LIBRARIES})
 add_executable(pixelPairsFromStereo pixelPairsFromStereo.cc) 
 target_link_libraries(pixelPairsFromStereo  ${VISIONWORKBENCH_LIBRARIES}  ${StereoPipeline_LIBRARIES}) 
 
+add_executable(point_to_dem_dist point_to_dem_dist.cc) 
+target_link_libraries(point_to_dem_dist  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
 
-
-
-
-
-
-
+add_executable(dem_mean_std dem_mean_std.cc) 
+target_link_libraries(dem_mean_std  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
