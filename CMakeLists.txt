@@ -16,7 +16,6 @@ set(PACKAGE_BUGREPORT "scott.t.mcmichael@nasa.gov")
 #===============================================================================
 # Configuration options
 
-
 # --- Directory paths ---
 set(BASESYSTEM_INSTALL_DIR "" CACHE FILEPATH "Path to AutoTools installation directory")
 if(NOT BASESYSTEM_INSTALL_DIR)
@@ -41,11 +40,6 @@ message("Stereo Pipeline path  = ${STEREOPIPELINE_INSTALL_DIR}")
 set(VISIONWORKBENCH_ROOT   ${VISIONWORKBENCH_INSTALL_DIR})
 set(StereoPipeline_ROOT    ${STEREOPIPELINE_INSTALL_DIR})
 
-#set(BASESYSTEM_INSTALL_DIR "/home/smcmich1/repo/BaseSystem")
-#set(VISIONWORKBENCH_ROOT   "/home/smcmich1/repo/visionworkbench/build")
-#set(StereoPipeline_ROOT    "/home/smcmich1/repo/StereoPipeline/build")
-
-
 # --- Custom options ---
 option(BUILD_SHARED_LIBS "Produce shared libraries." TRUE)
 
@@ -69,12 +63,12 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 message("--------------------------------------------------------------")
 message("Searching for boost...")
 
-set(BOOST_ROOT "${BASESYSTEM_INSTALL_DIR}/include/boost-1_54")
+set(BOOST_ROOT "${BASESYSTEM_INSTALL_DIR}/include/boost-1_55")
 set(BOOST_LIBRARYDIR  "${BASESYSTEM_INSTALL_DIR}/lib")
-set(BOOST_INCLUDEDIR "${BASESYSTEM_INSTALL_DIR}/include/boost-1_54/boost")
+set(BOOST_INCLUDEDIR "${BASESYSTEM_INSTALL_DIR}/include/boost-1_55/boost")
 set(Boost_NO_SYSTEM_PATHS ON) #This does not seem to work
 #set(Boost_DEBUG 1) # Uncomment for useful finding boost debug output
-set(BOOST_MIN_VERSION "1.54.0")
+set(BOOST_MIN_VERSION "1.55.0")
 set(REQUIRED_BOOST_LIBS program_options system filesystem regex date_time thread iostreams)
 
 find_package(Boost ${BOOST_MIN_VERSION} REQUIRED COMPONENTS ${REQUIRED_BOOST_LIBS})
@@ -196,6 +190,19 @@ target_link_libraries(imagestats  ${VISIONWORKBENCH_LIBRARIES})
 add_executable(lola_compare lola_compare.cc) 
 target_link_libraries(lola_compare  ${VISIONWORKBENCH_LIBRARIES}) 
 
+
+add_executable(matchBinaryToCsv matchBinaryToCsv.cc) 
+target_link_libraries(matchBinaryToCsv  ${VISIONWORKBENCH_LIBRARIES}) 
+
+add_executable(getLatLonBounds getLatLonBounds.cc) 
+target_link_libraries(getLatLonBounds  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(maskFromIntersectError maskFromIntersectError.cc) 
+target_link_libraries(maskFromIntersectError  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES}) 
+
+add_executable(stereoIpFind stereoIpFind.cc)
+target_link_libraries(stereoIpFind  ${VISIONWORKBENCH_LIBRARIES}  ${StereoPipeline_LIBRARIES}) 
+
 add_executable(pixelPairsFromStereo pixelPairsFromStereo.cc) 
 target_link_libraries(pixelPairsFromStereo  ${VISIONWORKBENCH_LIBRARIES}  ${StereoPipeline_LIBRARIES}) 
 
@@ -204,3 +211,4 @@ target_link_libraries(point_to_dem_dist  ${VISIONWORKBENCH_LIBRARIES} ${StereoPi
 
 add_executable(dem_mean_std dem_mean_std.cc) 
 target_link_libraries(dem_mean_std  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
+

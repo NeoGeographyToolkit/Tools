@@ -341,3 +341,35 @@ def getIsisBoundingBox(cubePath):
 
     return (minLon, maxLon, minLat, maxLat)
 
+
+def getCubeCenterLatitude(cubePath, workDir='tmp'):
+    """Calls caminfo on a cube and returns the CenterLatitude value"""
+
+    # Make sure the requested file is present
+    if not os.path.exists(cubePath):
+        raise Exception('File ' + cubePath + ' does not exist!')
+
+    # Call caminfo (from ISIS) on the input cube to find out the CenterLatitude value
+    camInfoOuputPath = workDir + "/camInfoOutput.txt"
+    cmd = 'caminfo from=' + cubePath + ' to=' + camInfoOuputPath
+    os.system(cmd)
+
+    if not os.path.exists(camInfoOuputPath):
+        raise Exception('Call to caminfo failed on file ' + cubePath)
+
+    # Read in the output file to extract the CenterLatitude value
+    centerLatitude = -9999
+    infoFile       = open(camInfoOuputPath, 'r')
+    for line in infoFile:
+        if (line.find('CenterLatitude') >= 0):
+            eqPt   = line.find('=')
+            numStr = line[eqPt+2:]
+            centerLatitude = float(numStr)
+            break
+    # Make sure we found the desired value
+    if (centerLatitude == -9999):          
+        raise Exception("Unable to find CenterLatitude from file " + cubePath)
+
+    # Clean up temporary file
+    os.remove(camInfoOuputPath)
+

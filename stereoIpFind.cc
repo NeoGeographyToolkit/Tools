@@ -104,11 +104,12 @@ bool parseInputParams(int argc, char *argv[], Parameters &params)
                     << e.what() << "\n" << usage << general_options );
     }
 
-    if ( !vm.count("left") || !vm.count("right") || !vm.count("output") )
+    if ( !vm.count("left") || !vm.count("right") || !vm.count("output") ) {
       vw_throw( vw::ArgumentErr() << "Requires <left input path> <right input path> <output path> input in order to proceed.\n\n"
                 << usage << general_options );
+    }
 
-
+    return true;
 
 }
 
@@ -119,6 +120,7 @@ bool produceInterestPoints(const Parameters &params)
   boost::filesystem::path leftBoostPath (params.leftFilePath );
   boost::filesystem::path rightBoostPath(params.rightFilePath);
 
+  printf("Checking for input files...\n");
   if (!boost::filesystem::exists(boost::filesystem::path(params.leftFilePath)))
   {
     printf("Error: input file %s is missing!\n", params.leftFilePath.c_str());
@@ -171,6 +173,7 @@ int main( int argc, char *argv[] )
 
     Parameters params;
 
+    printf("Parsing input parameters...\n");
     if (!parseInputParams(argc, argv, params))
       return 1;
 

@@ -19,7 +19,7 @@
 
 """IrgFileFunctions.py - General functions for handling files"""
 
-import sys, os, re, subprocess, string, time, errno
+import sys, os, re, shutil, subprocess, string, time, errno
 
 
 def createFolder(path):
@@ -56,12 +56,13 @@ def getFileLineCount(filePath):
 def checkIfToolExists(toolName):
     """Returns true if the system knows about the utility with this name (it is on the PATH)"""
 
-    # Determine the percentage of good pixels   
+    # Look for the tool using the 'which' command
     cmd = ['which', toolName]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     translateOut, err = p.communicate()
+    
 
-    # Parse the output
+    # Check if that command failed to find the file
     failString = 'no ' + toolName + ' in ('
     if translateOut.find(failString) >= 0:
         raise Exception('Missing requested tool ' + toolName)

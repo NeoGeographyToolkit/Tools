@@ -13,7 +13,7 @@ git clone https://github.com/NeoGeographyToolkit/Tools.git
 cd Tools
 mkdir build
 cd build
-cmake -D BASESYSTEM_INSTALL_DIR=<path to your base sytem install directory> -D VISIONWORKBENCH_INSTALL_DIR=<path to your vision workbench install directory> -D STEREOPIPELINE_INSTALL_DIR=<path to your stereo pipeline install directory> ..
+cmake -D BASESYSTEM_INSTALL_DIR=<path to your base sytem install directory> -D VISIONWORKBENCH_INSTALL_DIR=<path to your vision workbench install directory> -D STEREOPIPELINE_INSTALL_DIR=<path to your stereo pipeline install directory> -D CMAKE_BUILD_TYPE=<probably Release>..
 
 
 
