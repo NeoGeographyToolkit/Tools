@@ -25,6 +25,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <iomanip>
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -36,7 +37,6 @@ namespace po = boost::program_options;
 #include <vw/Image/Statistics.h>
 #include <vw/FileIO/DiskImageResource.h>
 #include <vw/FileIO/DiskImageView.h>
-
 
 using namespace vw;
 
@@ -174,48 +174,69 @@ int main( int argc, char *argv[] )
 
   const int numBins = 20; // 5% intervals
 
-  std::string demPath, lolaDataPath, outputPath="";
+  std::string demPath, lolaDataPath, outputPath="", mapPath="", csvPath="";
   int removeHistogramOutliers=0;
-  bool useAbsolute;
+  bool useAbsolute, sub180;
 
   po::options_description general_options("Options");
   general_options.add_options()
     ("help,h",        "Display this help message")  
-    ("input-dem,d",   po::value<std::string>(&demPath),                           "Explicitly specify the DEM  file")
-    ("input-lola,l",  po::value<std::string>(&lolaDataPath),                      "Explicitly specify the LOLA file")
     ("output-file,o", po::value<std::string>(&outputPath)->default_value(""),     "Specify an output text file to store the program output")
-    ("absolute",      po::value<bool       >(&useAbsolute)->default_value(false), "Output the absolute difference as opposed to just the difference.")
+    ("csv-log,c",     po::value<std::string>(&csvPath)->default_value(""),        "Specify an csv file to record individual point errors to")
+    ("map,m",         po::value<std::string>(&mapPath)->default_value(""),        "Write output diagnostic image to file.")
+    ("absolute",      po::bool_switch       (&useAbsolute)->default_value(false), "Output the absolute difference as opposed to just the difference.")
+    ("sub180",        po::bool_switch       (&sub180)->default_value(false),      "Force all output degrees in csv file to be in -180 to 180 range.")
     ("limit-hist",    po::value<int        >(&removeHistogramOutliers)->default_value(0), "Limits the histogram to +/- N standard deviations from the mean");
-    
-  po::positional_options_description positional_desc;
-  positional_desc.add("input-image", 1);
-  positional_desc.add("input-lola",  1);
-  
-  std::ostringstream usage;
-  usage << "Usage: " << argv[0] << " [options] <input-DEM> <input-LOLA>" << std::endl << std::endl;
-  usage << general_options << std::endl;
 
+
+  po::options_description positional("");
+  positional.add_options()
+    ("input-dem",   po::value(&demPath     ), "Path to DEM file")
+    ("lola-points", po::value(&lolaDataPath), "Path to LOLA RDR point file");
+
+  po::positional_options_description positional_desc;
+  positional_desc.add("input-dem",   1);
+  positional_desc.add("lola-points", 1);
+
+  std::string usage("[options] <input DEM path> <input LOLA path>\n");
   po::variables_map vm;
   try {
-    po::store( po::command_line_parser( argc, argv ).options(general_options).positional(positional_desc).run(), vm );
+    po::options_description all_options;
+    all_options.add(general_options).add(positional);
+
+    po::store( po::command_line_parser( argc, argv ).options(all_options).positional(positional_desc).style( po::command_line_style::unix_style ).run(), vm );
+
     po::notify( vm );
-  } catch (const po::error& e) {
-    std::cout << "An error occured while parsing command line arguments.\n";
-    std::cout << "\t" << e.what() << "\n\n";
-    std::cout << usage.str();
-    return 1;
+  } catch (po::error const& e) {
+    vw::vw_throw( vw::ArgumentErr() << "Error parsing input:\n"
+                  << e.what() << "\n" << usage << general_options );
   }
 
+  if ( !vm.count("input-dem") || !vm.count("lola-points") )
+    vw_throw( vw::ArgumentErr() << "Requires <input DEM path> and <input LOLA path> input in order to proceed.\n\n"
+              << usage << general_options );
+
+
+
+  // Load the input DEM
   ImageView<PixelGray<float> > inputDem;
   cartography::GeoReference georef;
-
   if (!read_georeferenced_image(inputDem, georef, demPath))
   {
     printf("Failed to read image!\n");
     return false;
   }
   std::cout << "Image size = " << inputDem.rows() << ", " << inputDem.cols() << std::endl;
-    
+
+  //// Pixel check
+  //Vector2 pixelCoord(0,0);
+  //Vector2 gdcCoord = georef.pixel_to_lonlat(pixelCoord);
+  //std::cout << "0,0 = " << gdcCoord.x() << ", " << gdcCoord.y() << std::endl;
+
+  //pixelCoord = Vector2(inputDem.cols()-1,inputDem.rows()-1);
+  //gdcCoord = georef.pixel_to_lonlat(pixelCoord);
+  //std::cout << inputDem.cols()-1 << "," << inputDem.rows()-1 << " = " << gdcCoord.x() << ", " << gdcCoord.y() << std::endl;
+
   // Loop through all lines in the LOLA data file
   std::ifstream lolaFile;
   lolaFile.open(lolaDataPath.c_str());
@@ -226,55 +247,67 @@ int main( int argc, char *argv[] )
     printf("Failed to open LOLA data file %s\n", lolaDataPath.c_str());
     return false;
   }
-  
+
+  std::ofstream csvFile;
+  if (csvPath.size() > 0) // Start CSV file and write header
+  {
+    csvFile.open(csvPath.c_str());
+    csvFile << "# Latitude(Deg), Longitude(Deg), LOLA elevation(m), DEM elevation(m), difference(m)" << std::endl;
+  }
+
   // Loop through all the lines in the file
   unsigned int numValidPixels = 0;
   RunningStatistics statCalc;
   double  demValue = 0;
+  std::list<vw::Vector3> hitList;
   std::vector<float> diffVector;
   diffVector.reserve(5000); // Init this to an estimated size
   while (std::getline(lolaFile, currentLine))
   {
-
     // Get the location of the first few commas
     size_t timeComma    = currentLine.find(",");            
     size_t lonComma     = currentLine.find(",", timeComma+1); 
     size_t latComma     = currentLine.find(",", lonComma+1);  
     size_t radiusComma  = currentLine.find(",", latComma+1);  
-    
+
     // Extract text containing the numbers we need    
-    std::string lonString    = currentLine.substr(timeComma+1, lonComma   -timeComma-1); 
-    std::string latString    = currentLine.substr(lonComma +1, latComma   -lonComma -1);     
-    std::string radiusString = currentLine.substr(latComma +1, radiusComma-latComma -1); 
-    
+    std::string lonString    = currentLine.substr(timeComma+1, lonComma   -timeComma-1);
+    std::string latString    = currentLine.substr(lonComma +1, latComma   -lonComma -1);
+    std::string radiusString = currentLine.substr(latComma +1, radiusComma-latComma -1);
+
 
     // Convert to floating point
     double ptLonDeg   = atof(lonString.c_str()   );
     double ptLatDeg   = atof(latString.c_str()   );
     double ptRadiusKm = atof(radiusString.c_str());
-    
+
     // Convert to common elevation datum
     double lolaElevation = (ptRadiusKm*1000.0) - MEAN_MOON_RADIUS;
 
     // Find the equivalent location in the image
-      
     Vector2 gdcCoord(ptLonDeg, ptLatDeg);
-
     Vector2 gccCoord   = georef.lonlat_to_point(gdcCoord);
-    
     Vector2 pixelCoord = georef.point_to_pixel(gccCoord);
-    
+
+    //std::cout << "gdcCoord = " << gdcCoord << std::endl;
+    //std::cout << "pixelCoord = " << pixelCoord << std::endl;
+
+    // Throw out pixel misses
     if ( (pixelCoord[0] < 0) ||
          (pixelCoord[0] >= inputDem.cols()) ||
          (pixelCoord[1] < 0) ||
          (pixelCoord[1] >= inputDem.rows())   )
-      continue; // Throw out pixel misses
+      continue; 
 
+//    std::cout << "pixelCoord VALID = " << pixelCoord << std::endl;
+
+
+    // Get DEM value and make sure it is valid
     demValue = inputDem(pixelCoord[0], pixelCoord[1])[0];
     if (demValue <= -32767) //TODO: Obtain the no-data value!
       continue; // Throw out flag values
 
-//    std::cout << "demHeight     = " << demValue      << std::endl;    
+//    std::cout << "demHeight     = " << demValue      << std::endl;
 //    std::cout << "lolaElevation = " << lolaElevation << std::endl;    
 
     // Check difference
@@ -286,8 +319,23 @@ int main( int argc, char *argv[] )
     // Update records
     statCalc.Push(diff);
     diffVector.push_back(diff); // Record difference values for computing histogram later
-
+    hitList.push_back(vw::Vector3(pixelCoord[0], pixelCoord[1], fabs(diff)));
+    
+    // Write a file listing all the compared locations
+    if (csvPath.size() > 0)
+    {
+      csvFile.precision(12);
+      if (sub180)
+      {
+      if (ptLonDeg > 180)
+        ptLonDeg -= 360;
+      }
+      csvFile << ptLatDeg << ", " << ptLonDeg << ", " << lolaElevation << ", " << demValue << ", " << diff << std::endl;
+    }
   } // End of loop through lines
+  
+  if (csvPath.size() > 0)
+    csvFile.close();
 
   printf("Found %d valid pixels\n", numValidPixels);
 
@@ -299,8 +347,8 @@ int main( int argc, char *argv[] )
 
   if (removeHistogramOutliers > 0) // Cut off range at +/- N std
   {
-    printf("Image min = %lf\n", minVal);
-    printf("Image max = %lf\n", maxVal);
+    printf("Diff min = %lf\n", minVal);
+    printf("Diff max = %lf\n", maxVal);
 
     minVal = meanValue - removeHistogramOutliers*stdDevVal;
     if (minVal < statCalc.Min())
@@ -346,8 +394,49 @@ int main( int argc, char *argv[] )
     std::ofstream file(outputPath.c_str());
     writeOutput(diffVector, levels, hist, statCalc, file);
     file.close();
-  }     
-  
+  }
+
+  // Optionally write a diagnostic image
+  if (mapPath.size() > 0)
+  {
+    double outputFraction = 0.1; // Currently output image is just a fraction of the input image
+    
+    //TODO: Use existing functions to do this!
+    // Initialize a diagnostic image
+    // - Convert the input image from float32 grayscale to uint8 RGB
+    int plotWidth  = inputDem.cols() * outputFraction;
+    int plotHeight = inputDem.rows() * outputFraction;
+    ImageView<PixelRGB<unsigned char> > diffPlot(plotWidth, plotHeight);
+    
+    for (int r=0; r<plotHeight; ++r)
+    {
+      for (int c=0; c<plotWidth; ++c)
+      {
+        //TODO: Get scaling factors for input image!
+        float         originalValue = inputDem(r*outputFraction, c*outputFraction);
+        unsigned char grayValue     = 0;//(originalValue - minVal) * (range/255.0);
+        diffPlot(r,c) = PixelRGB<unsigned char>(grayValue, grayValue, grayValue);
+      }
+    }
+    
+    
+    // Loop through all valid pixel hits and draw a scaled error in red
+    std::list<vw::Vector3>::const_iterator iter;
+    for (iter=hitList.begin(); iter!=hitList.end(); ++iter)
+    {
+      double diff = iter->z();
+      unsigned char scaledDiff = (diff - minVal) * (range/255.0);
+      diffPlot(iter->x(), iter->y()) = PixelRGB<unsigned char>(scaledDiff, 0, 0);
+    }
+
+    
+    vw_out() << "Writing error diagram: " << mapPath << "\n";
+    write_image(mapPath, diffPlot);
+
+    
+    
+  } // End of wrriting diagnostic image
+
   return 0;
 }
 

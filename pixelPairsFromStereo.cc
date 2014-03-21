@@ -29,6 +29,7 @@
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
+#include <vw/Math/Matrix.h>
 #include <vw/Cartography/GeoReference.h>
 #include <vw/Image/ImageView.h>
 #include <vw/Image/MaskViews.h>
@@ -54,39 +55,83 @@ namespace po = boost::program_options;
 /// \file pixelPairsFromStereo.cc Generates a list of pixel point pairs from the output of the stereo tool
 
 
-
-
-
 int main( int argc, char *argv[] ) {
 
 
   std::string inputImagePath, outputPath="";
   int pointSpacing=0;
+  std::vector<float> leftAffineVals, rightAffineVals;
+
+  // Affine transforms are identity matrix by default
+  vw::Matrix<double> leftAffine, rightAffine;
+  leftAffine  = vw::math::identity_matrix<3>();
+  rightAffine = vw::math::identity_matrix<3>();
+  // Note that the user inputs the matrices that were used in stereo,
+  //  we need to compute the inverse of those matrices.
 
   po::options_description general_options("Options");
   general_options.add_options()
-    ("help,h",        "Display this help message")  
-    ("input-file,i",   po::value<std::string>(&inputImagePath),                "The input stereo file (xxx-D.tif)")
-    ("output-file,o",  po::value<std::string>(&outputPath)->default_value(""), "Specify an output text file to store the program output")
-    ("pointSpacing,p", po::value<int        >(&pointSpacing)->default_value(100), "Selected pixels are this far apart");
-    
+    ("help",        "Display this help message")
+    ("pointSpacing", po::value<int        >(&pointSpacing)->default_value(100), "Selected pixels are this far apart")
+    ("leftAffine",    po::value<std::vector<float> >(&leftAffineVals)->multitoken(),
+                           "Affine transform which was applied to the left image pixels)")
+    ("rightAffine",   po::value<std::vector<float> >(&rightAffineVals)->multitoken(),
+                           "Affine transform which was applied to the right image pixels)");
+
+  po::options_description positional("");
+  positional.add_options()
+    ("input-file",   po::value(&inputImagePath), "The input stereo file (xxx-D.tif)")
+    ("output-file",  po::value(&outputPath),     "Specify an output text file to store the program output");
+
   po::positional_options_description positional_desc;
+  positional_desc.add("input-file",  1);
+  positional_desc.add("output-file", 1);
 
-  std::ostringstream usage;
-  usage << "Usage: " << argv[0] << " [options]" << std::endl << std::endl;
-  usage << general_options << std::endl;
-
+  std::string usage("[options] <input path> <output path>\n");
   po::variables_map vm;
   try {
-    po::store( po::command_line_parser( argc, argv ).options(general_options).positional(positional_desc).run(), vm );
+    po::options_description all_options;
+    all_options.add(general_options).add(positional);
+
+    po::store( po::command_line_parser( argc, argv ).options(all_options).positional(positional_desc).style( po::command_line_style::unix_style ^ po::command_line_style::allow_short ).run(), vm );
+
     po::notify( vm );
-  } catch (const po::error& e) {
-    std::cout << "An error occured while parsing command line arguments.\n";
-    std::cout << "\t" << e.what() << "\n\n";
-    std::cout << usage.str();
-    return 1;
+  } catch (po::error const& e) {
+    vw::vw_throw( vw::ArgumentErr() << "Error parsing input:\n"
+                  << e.what() << "\n" << usage << general_options );
   }
 
+  if ( !vm.count("input-file") || !vm.count("output-file") )
+    vw_throw( vw::ArgumentErr() << "Requires <input path> and <output path> input in order to proceed.\n\n"
+              << usage << general_options );
+
+  const size_t NUM_AFFINE_ELEMENTS = 6; // The last three elements are 0 0 1
+  if (vm.count("leftAffine"))
+  {
+    // Check input size
+    if (leftAffineVals.size() != NUM_AFFINE_ELEMENTS)
+      vw::vw_throw( vw::ArgumentErr() << "Incorrect number of left affine arguments passed in!\n"
+                                      << usage << general_options );
+    // Store affine values in a temp matrix object which is then inverted
+    vw::Matrix<double> affineTemp = vw::math::identity_matrix<3>();
+    for (int i=0; i<NUM_AFFINE_ELEMENTS; ++i)
+      affineTemp.data()[i] = leftAffineVals[i];
+    vw::vw_out() << "Read in left affine matrix:\n" << affineTemp << "\n";
+    leftAffine = inverse(affineTemp);
+  }
+  if (vm.count("rightAffine"))
+  {
+    // Check input size
+    if (rightAffineVals.size() != NUM_AFFINE_ELEMENTS)
+      vw::vw_throw( vw::ArgumentErr() << "Incorrect number of right affine arguments passed in!\n"
+                                      << usage << general_options );
+    // Store affine values in a temp matrix object which is then inverted
+    vw::Matrix<double> affineTemp = vw::math::identity_matrix<3>();
+    for (int i=0; i<NUM_AFFINE_ELEMENTS; ++i)
+      affineTemp.data()[i] = rightAffineVals[i];
+    vw::vw_out() << "Read in right affine matrix:\n" << affineTemp << "\n";
+    rightAffine = inverse(affineTemp);
+  }
 
   try {
   
@@ -131,8 +176,15 @@ int main( int argc, char *argv[] ) {
             int rightCol = floor(0.5 + col + (*iter)[0]);
             int rightRow = floor(0.5 + row + (*iter)[1]);
 
+            // Apply the affine transforms to the left and right pixels
+            vw::Vector3 leftCoord (col,      row, 1);
+            vw::Vector3 rightCoord(rightCol, rightRow, 1);
+            vw::Vector3 leftTransformed  = leftAffine * leftCoord;
+            vw::Vector3 rightTransformed = rightAffine * rightCoord;
+
             // Write to file and record total
-            outputFile << col <<","<< row <<","<< rightCol <<","<< rightRow << std::endl;
+            outputFile << leftTransformed [0] <<","<< leftTransformed [1] <<","
+                       << rightTransformed[0] <<","<< rightTransformed[1] << std::endl;
             ++count;
           } // End valid check
         } // End spacing check
