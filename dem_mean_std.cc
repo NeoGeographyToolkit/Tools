@@ -56,9 +56,9 @@ using namespace std;
 
 struct Options : asp::BaseOptions {};
 
-// Find the mean and std dev DEM of the given input sets of DEMs.
-// Also output count.tif, showing for each pixel how many times
-// it was encountered in the stack of DEMs.
+/// Find the mean and std dev DEM of the given input sets of DEMs.
+/// Also output count.tif, showing for each pixel how many times
+/// it was encountered in the stack of DEMs.
 
 int main( int argc, char *argv[] ){
 

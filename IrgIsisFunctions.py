@@ -46,8 +46,15 @@ def getImageSize(imagePath):
     size = [numSamples, numLines]
     return size
 
+def isIsisFile(filePath):
+    """Returns True if the file is an ISIS file, False otherwise."""
 
-def parseHeadOutput(textPath, cubePath):
+    # Currently we treat all files with .cub extension as ISIS files
+    extension = os.path.splitext(filePath)[1]
+    return (extension == 'cub')
+
+
+def parseHeadOutput(headText, cubePath):
     """Parses the output from head [cube path] and returns a dictionary containing all kernels"""
 
     kernelDict = dict()
@@ -56,11 +63,11 @@ def parseHeadOutput(textPath, cubePath):
     cubeFolder     = os.path.dirname(cubePath)
 
     # Search each line in the folder for a required kernel file
-    dataFile = open(textPath, 'r')
+    
     lastLine = ''
     kernelsStarted = False
     currentKernelType = 'ERROR!'
-    for line in dataFile:
+    for line in headText.split('\n'):
         # Append leftovers from last line and clear left/right whitespace
         workingLine = lastLine + line.strip()
         lastLine = ''
@@ -144,20 +151,18 @@ def parseHeadOutput(textPath, cubePath):
     return kernelDict
 
 
-def getKernelsFromCube(cubePath, tempFolder):
+def getKernelsFromCube(cubePath):
     """Returns a list of all the SPICE kernels needed by a cube """
 
     # Call head -120 on file, write to a temp file for parsing
-    tempTextPath = os.path.join(tempFolder, "headOutput.txt")
-    cmd = "head -120 "+cubePath+" > "+tempTextPath
+    cmd = ['head', '-120', cubePath]
     #print cmd
-    os.system(cmd)
-    if not os.path.exists(tempTextPath):
-        raise Exception('Failed to extract cube kernel data!')
-
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    outputText, err = p.communicate()
+    
     # Parse output looking for all the kernel files
     #print 'Looking for source frame file...'
-    kernelList = parseHeadOutput(tempTextPath, cubePath)
+    kernelList = parseHeadOutput(outputText, cubePath)
     if not kernelList:
         raise Exception('Unable to find any kernel files in ' + cubePath)
 
