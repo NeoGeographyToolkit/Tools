@@ -31,7 +31,7 @@ def getImageSize(imagePath):
 
 
 def getGdalInfoTagValue(text, tag):
-    """Gets the value of a gdal parameter in a [""] tag or None if it is abset."""
+    """Gets the value of a gdal parameter in a [""] tag or None if it is absent."""
 
     try:
         lineAfterTag = IrgStringFunctions.getLineAfterText(text, tag)
@@ -40,7 +40,7 @@ def getGdalInfoTagValue(text, tag):
         commaPos   = lineAfterTag.find(',')
         bracketPos = lineAfterTag.find(']')
         # The value is always returned as a string
-        return lineAfterTag[commaPos+1:bracketPos]
+        return IrgStringFunctions.convertToFloatIfNumber(lineAfterTag[commaPos+1:bracketPos])
     
     except Exception: # Requested tag was not found
         return None
@@ -63,8 +63,8 @@ def getImageGeoInfo(imagePath):
     outputDict['origin']     = originVals
     outputDict['pixel size'] = pixelSizeVals
     
-    outputDict['standard_parallel_1'] = float(getGdalInfoTagValue(textOutput, 'standard_parallel_1'))
-    outputDict['central meridian']    = float(getGdalInfoTagValue(textOutput, 'central_meridian'))
+    outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
+    outputDict['central meridian']    = getGdalInfoTagValue(textOutput, 'central_meridian')
     
     return outputDict
 

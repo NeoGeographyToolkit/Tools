@@ -21,6 +21,8 @@
 
 import sys, os, re, subprocess, string, time, errno
 
+import IrgStringFunctions
+
 
 # TODO: This would make more sense in IrgGeoFunctions but some functions here need it!
 def getImageSize(imagePath):
@@ -367,9 +369,7 @@ def getCubeCenterLatitude(cubePath, workDir='tmp'):
     infoFile       = open(camInfoOuputPath, 'r')
     for line in infoFile:
         if (line.find('CenterLatitude') >= 0):
-            eqPt   = line.find('=')
-            numStr = line[eqPt+2:]
-            centerLatitude = float(numStr)
+            centerLatitude = IrgStringFunctions.getNumberAfterEqualSign(line, )
             break
     # Make sure we found the desired value
     if (centerLatitude == -9999):          
@@ -378,6 +378,7 @@ def getCubeCenterLatitude(cubePath, workDir='tmp'):
     # Clean up temporary file
     os.remove(camInfoOuputPath)
     
+    return centerLatitude
     
 
 def imgDemToIsisDem(imgPath, outputPath):
