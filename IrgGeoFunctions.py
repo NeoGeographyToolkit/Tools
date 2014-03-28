@@ -21,7 +21,7 @@
 
 import sys, os, glob, re, shutil, subprocess, string, time, errno
 
-import IrgIsisFunctions
+import IrgIsisFunctions, IrgStringFunctions
 
 
 # This function is wrapped here for convenience
@@ -29,6 +29,82 @@ import IrgIsisFunctions
 def getImageSize(imagePath):
     return IrgIsisFunctions.getImageSize(imagePath)
 
+
+def getGdalInfoTagValue(text, tag):
+    """Gets the value of a gdal parameter in a [""] tag or None if it is abset."""
+
+    try:
+        lineAfterTag = IrgStringFunctions.getLineAfterText(text, tag)
+        
+        # The remaining line should look like this: ",25],
+        commaPos   = lineAfterTag.find(',')
+        bracketPos = lineAfterTag.find(']')
+        # The value is always returned as a string
+        return lineAfterTag[commaPos+1:bracketPos]
+    
+    except Exception: # Requested tag was not found
+        return None
+
+def getImageGeoInfo(imagePath):
+    """Obtains some image geo information from gdalinfo in dictionary format"""
+    
+    # Call command line tool silently
+    cmd = ['gdalinfo', imagePath, '-stats']
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    textOutput, err = p.communicate()
+    
+    originLine    = IrgStringFunctions.getLineAfterText(textOutput, 'Origin = ')
+    pixelSizeLine = IrgStringFunctions.getLineAfterText(textOutput, 'Pixel Size = ')
+    
+    originVals    = IrgStringFunctions.getNumbersInParentheses(originLine)
+    pixelSizeVals = IrgStringFunctions.getNumbersInParentheses(pixelSizeLine)
+      
+    outputDict = {}
+    outputDict['origin']     = originVals
+    outputDict['pixel size'] = pixelSizeVals
+    
+    outputDict['standard_parallel_1'] = float(getGdalInfoTagValue(textOutput, 'standard_parallel_1'))
+    outputDict['central meridian']    = float(getGdalInfoTagValue(textOutput, 'central_meridian'))
+    
+    return outputDict
+
+def getImageStats(imagePath):
+    """Obtains some image statistics from gdalinfo"""
+    
+    if not os.path.exists(imagePath):
+        raise Exception('Image file ' + imagePath + ' not found!')
+    
+    # Call command line tool silently
+    cmd = ['gdalinfo', imagePath, '-stats']
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    textOutput, err = p.communicate()
+    
+    # Statistics are computed seperately for each band
+    bandStats = []
+    band = 0
+    while (True): # Loop until we run out of bands
+        # Look for the stats line for this band
+        bandString = 'Band ' + str(band+1) + ' Block='
+        bandLoc = textOutput.find(bandString)
+        if bandLoc < 0:
+            return bandStats # Quit if we did not find it
+            
+        # Now parse out the statistics for this band
+        bandMaxStart  = textOutput.find('STATISTICS_MAXIMUM=', bandLoc)
+        bandMeanStart = textOutput.find('STATISTICS_MEAN=',    bandLoc)
+        bandMinStart  = textOutput.find('STATISTICS_MINIMUM=', bandLoc)
+        bandStdStart  = textOutput.find('STATISTICS_STDDEV=',  bandLoc)
+               
+        bandMax  = IrgStringFunctions.getNumberAfterEqualSign(textOutput, bandMaxStart)
+        bandMean = IrgStringFunctions.getNumberAfterEqualSign(textOutput, bandMeanStart)
+        bandMin  = IrgStringFunctions.getNumberAfterEqualSign(textOutput, bandMinStart)
+        bandStd  = IrgStringFunctions.getNumberAfterEqualSign(textOutput, bandStdStart)
+            
+        # Add results to the output list
+        bandStats.append( (bandMin, bandMax, bandMean, bandStd) )
+            
+        band = band + 1 # Move to the next band
+    
 
 
 def getGeoTiffBoundingBox(geoTiffPath):

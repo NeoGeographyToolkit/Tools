@@ -63,7 +63,11 @@ public:
     // - Outputs will be 0, 1*m_scaleVal, 2*m_scaleVal, ...
     if (scale)
       m_scaleVal = 255.0f / float(thresholdValues.size());
+    //m_maxVal = m_scaleVal * float(thresholdValues.size());
+
   }
+
+  float getScaleValue() const { return m_scaleVal; }
 
   /// Assign each pixel a value based on the threshold values.
   inline PixelGray<uint8> operator() (PixelRGB<float> const &p) const
@@ -84,19 +88,21 @@ public:
 private:
   std::vector<float> m_ValsSquared;
   float m_scaleVal;
+  //float m_maxVal; //TODO: Reverse confidence plot?
 };
 
 
 int main( int argc, char *argv[] ) {
 
-  std::string inputImagePath="", outputImagePath="";
+  std::string inputImagePath="", outputImagePath="", legendPath="";
 
   std::vector<float> thresholdValues;
   bool scaleOutput;
   po::options_description general_options("Options");
   general_options.add_options()
     ("help,h",         "Display this help message")
-    ("scaleOutput,s",  po::bool_switch(&scaleOutput)->default_value(false),  "Scale output up to 255")
+    ("scaleOutput,s",  po::bool_switch(&scaleOutput)->default_value(false),    "Scale output up to 255")
+    ("legend,l",       po::value<std::string>(&legendPath)->default_value(""), "Path to save legend text file to")
     ("thresholds",     po::value<std::vector<float> >(&thresholdValues)->multitoken(),
                          "Set one or more pixel threshold values (must be >0 and increasing value)");
 
@@ -143,9 +149,8 @@ int main( int argc, char *argv[] ) {
 
 
     // Set up thresholding function
-    ImageViewRef<PixelGray<vw::uint8> > mask = vw::per_pixel_filter(inputImage,
-                                                                    SumSquaredThreshFunctor(thresholdValues,
-                                                                                            scaleOutput));
+    SumSquaredThreshFunctor threshFunctor(thresholdValues, scaleOutput);
+    ImageViewRef<PixelGray<vw::uint8> > mask = vw::per_pixel_filter(inputImage, threshFunctor);
 
     // Set up output file
     boost::scoped_ptr<DiskImageResource> r(DiskImageResource::create(outputImagePath, mask.format()));
@@ -158,6 +163,19 @@ int main( int argc, char *argv[] ) {
     // Do everything!
     vw::block_write_image( *r, mask,
                           vw::TerminalProgressCallback( "maskFromIntersectError", "Generating mask:") );
+
+    // Write out a legend text file if the user requested it
+    if (legendPath.size() > 0) {
+      std::ofstream legendFile(legendPath.c_str());
+      legendFile << "Error threshold, Pixel value" << std::endl;
+      legendFile << "0, 0" << std::endl;
+      for (size_t i=0; i<thresholdValues.size(); ++i)
+        legendFile << thresholdValues[i] << ", " << (i+1) * threshFunctor.getScaleValue() << std::endl;
+      legendFile.close();
+
+      if (legendFile.fail()) // Handle errors writing the legend file
+        vw_throw( vw::ArgumentErr() << "Error writing threshold values to location " << legendPath << "\n\n");
+    }
 
   }
   catch (const Exception& e) {

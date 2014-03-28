@@ -88,6 +88,16 @@ def getLastGitTag(codePath):
 
     return textOutput
 
+def tarFileList(fileList, outputPath):
+    """Creates a tar file containing a list of files with no absolute paths"""
+
+    # This extra set of commands is needed to strip the absolute path name from each stored file
+    cmd = 'tar -jcvf ' + outputPath
+    for f in fileList:
+        cmd = cmd + ' -C ' + os.path.dirname(f) + ' ' + os.path.basename(f)
+    print cmd
+    os.system(cmd)
+
 
 #==================================================
 # This class implements a variant of OptionParser which ignores unknown options.

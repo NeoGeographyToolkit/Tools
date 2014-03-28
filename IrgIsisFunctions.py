@@ -377,4 +377,41 @@ def getCubeCenterLatitude(cubePath, workDir='tmp'):
 
     # Clean up temporary file
     os.remove(camInfoOuputPath)
+    
+    
+
+def imgDemToIsisDem(imgPath, outputPath):
+    """Converts a DEM in .IMG format (such as LRO WAC DTM) into ISIS compatible format"""
+    
+    outputFolder = os.path.dirname(outputPath)
+    
+    temp1 = outputPath + '_temp1.cub'
+    temp2 = outputPath + '_temp2.cub'
+    
+    cmd = 'pds2isis from= ' + imgPath + ' to= ' + temp1
+    os.system(cmd)
+    if not os.path.exists(temp1):
+        raise Exception('Error executing: ' + cmd)
+    
+    cmd = 'algebra  from= ' + temp1   + ' to= ' + temp2 + ' operator=unary A=1 C=1737400'
+    os.system(cmd)
+    if not os.path.exists(temp2):
+        raise Exception('Error executing: ' + cmd)
+    
+    cmd = 'demprep  from= ' + temp2   + ' to= ' + outputPath
+    os.system(cmd)
+    if not os.path.exists(outputPath):
+        raise Exception('Error executing: ' + cmd)
+
+    # Clean up output files
+    os.remove(temp1)
+    os.remove(temp2)
+
+    return True
+
+
+
+
+
+
 

@@ -22,7 +22,7 @@
 
 import sys, os, re, subprocess, string, time, errno
 
-
+import IrgStringFunctions
 
 def removeIntermediateStereoFiles(stereoPrefix):
     """Deletes intermediate files from a stereo output directory"""
@@ -130,4 +130,77 @@ def getStereoGoodPixelPercentage(inputPrefix, workDir=''):
 
     return percentGood
   
+  
+  
+def aspDemToIsisDem(imgPath, outputPath):
+    """Converts a DEM in .tif format (such as our outputs) into ISIS compatible format"""
+  
+    outputFolder = os.path.dirname(outputPath)
+    
+    temp1 = outputPath + '_temp1.cub'
+    temp2 = outputPath + '_temp2.cub'
+    
+    # Convert from ISIS3 to ISIS2    
+    cmd = 'gdal_tranlate -of ISIS2 from= ' + imgPath + ' to= ' + temp1
+    os.system(cmd)
+    if not os.path.exists(temp1):
+        raise Exception('Error executing: ' + cmd)
+    
+    cmd = 'pds2isis from= ' + temp1 + ' to= ' + temp2
+    os.system(cmd)
+    if not os.path.exists(temp2):
+        raise Exception('Error executing: ' + cmd)
+    
+    #cmd = 'algebra  from= ' + temp1   + ' to= ' + temp2 + ' operator=unary A=1 C=1737400'
+    #os.system(cmd)
+    #if not os.path.exists(temp2):
+    #    raise Exception('Error executing: ' + cmd)
+    
+    cmd = 'demprep  from= ' + temp2   + ' to= ' + outputPath
+    os.system(cmd)
+    if not os.path.exists(outputPath):
+        raise Exception('Error executing: ' + cmd)
+
+    # Clean up output files
+    os.remove(temp1)
+    os.remove(temp2)
+
+    return True
+  
+  
+def getAspVersionStrings():
+    """Returns version strings for ASP"""
+  
+    # Get the version text  
+    cmd = ['stereo_pprc', '-v']
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    textOut, err = p.communicate()
+  
+    # Parse the version text
+    
+    # Get the ASP stuff
+    aspFirstLine  = IrgStringFunctions.getLineAfterText(textOut, 'NASA Ames Stereo Pipeline', 0, True)
+    aspSecondLine = IrgStringFunctions.getLineAfterText(textOut, 'Build ID:',                 0, True)
+    aspLine = aspFirstLine + ', ' + aspSecondLine
+    
+    secondaryStart = textOut.find('Built against:')
+    
+    # Get the vision workbench stuff
+    vwFirstLine  = IrgStringFunctions.getLineAfterText(textOut, 'NASA Vision Workbench', secondaryStart, True)
+    vwSecondLine = IrgStringFunctions.getLineAfterText(textOut, 'Build ID:',             secondaryStart, True) # Make sure we don't find the ASP line
+    vwLine = vwFirstLine + ', ' + vwSecondLine
+
+    # Get the ISIS stuff
+    isisLine = IrgStringFunctions.getLineAfterText(textOut, 'USGS ISIS', secondaryStart, True)
+    isisLine = isisLine.split('#')[0] # Restrict to first part of the line
+  
+    return (aspLine, vwLine, isisLine)
+  
+    
+
+
+
+
+
+
 
