@@ -48,23 +48,66 @@ def getGdalInfoTagValue(text, tag):
 def getImageGeoInfo(imagePath):
     """Obtains some image geo information from gdalinfo in dictionary format"""
     
+    outputDict = {}
+    
     # Call command line tool silently
     cmd = ['gdalinfo', imagePath, '-stats']
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     textOutput, err = p.communicate()
     
+    # Get the size in pixels
+    imageSizeLine = IrgStringFunctions.getLineAfterText(textOutput, 'Size is ')
+    sizeVals      = imageSizeLine.split(',')
+    outputDict['image_size'] = (int(sizeVals[0]), int(sizeVals[1]))
+
+    # Get origin location and pixel size    
     originLine    = IrgStringFunctions.getLineAfterText(textOutput, 'Origin = ')
-    pixelSizeLine = IrgStringFunctions.getLineAfterText(textOutput, 'Pixel Size = ')
-    
+    pixelSizeLine = IrgStringFunctions.getLineAfterText(textOutput, 'Pixel Size = ')    
     originVals    = IrgStringFunctions.getNumbersInParentheses(originLine)
     pixelSizeVals = IrgStringFunctions.getNumbersInParentheses(pixelSizeLine)
-      
-    outputDict = {}
     outputDict['origin']     = originVals
     outputDict['pixel size'] = pixelSizeVals
-    
+
+    # Get these two values!
     outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
-    outputDict['central meridian']    = getGdalInfoTagValue(textOutput, 'central_meridian')
+    outputDict['central_meridian']    = getGdalInfoTagValue(textOutput, 'central_meridian')
+
+    
+    # Extract this variable which ASP inserts into its point cloud files
+    try:
+        pointOffsetLine = IrgStringFunctions.getLineAfterText(textOutput, 'POINT_OFFSET=') # Tag name must be synced with C++ code
+        offsetValues    = pointOffsetLine.split(' ')
+        outputDict['point_offset'] =  (float(offsetValues[0]), float(offsetValues[1]), float(offsetValues[2]))        
+    except:
+        pass # In most cases this line will not be present
+
+    
+    # List of dictionaries per band
+    outputDict['band_info'] = []
+    
+    # Populate band information
+    band = 1
+    while (True): # Loop until we run out of bands
+        bandString = 'Band ' + str(band) + ' Block='
+        bandLoc = textOutput.find(bandString)
+        if bandLoc < 0: # Ran out of bands
+            break
+        
+        # Found the band, read pertinent information
+        bandInfo = {}
+        
+        # Get the type string
+        bandLine = IrgStringFunctions.getLineAfterText('bandString')
+        typePos  = bandLine.find('Type=')
+        commaPos = bandLine.find(',')
+        typeName = bandLine[typePos+5:commaPos-1]
+        bandInfo['type'] = typename
+        
+        outputDict['band_info'] = bandInfo
+        
+        band = band + 1 # Move on to the next band
+        
+    
     
     return outputDict
 
@@ -139,4 +182,78 @@ def getImageBoundingBox(filePath):
         return IrgIsisFunctions.getIsisBoundingBox(filePath)
     
     # Any other file types will end up raising some sort of exception
+    
+    
+    
+    
+
+def build_vrt( fullImageSize, tileLocs, tilePaths, outputPath ):
+    """Generates a VRT file from a set of image tiles and their locations in the output image"""
+
+    outputFolder = os.path.dirname(outputPath)
+
+    f = open(outputPath, 'w')
+    f.write("<VRTDataset rasterXSize=\"%i\" rasterYSize=\"%i\">\n" % (int(fullImageSize[0]),int(fullImageSize[1])) ) # Write whole image size
+
+    #
+    ## If a tile is missing, for example, in the case we
+    ## skipped it when it does not intersect user's crop box,
+    ## substitute it with a different one, to ensure the mosaic
+    ## does not have holes. --> Does this make sense?
+    #goodFilename = ""
+    #for tile in tiles: # Find the first valid tile (we don't care which one)
+    #    directory = settings['out_prefix'][0] + tile.name_str()
+    #    filename  = directory + "/" + tile.name_str() + tile_postfix
+    #    if os.path.isfile(filename):
+    #        goodFilename = filename
+    #        break
+    #if goodFilename == "":
+    #    raise Exception('No tiles were generated')
+
+    
+    # Read some metadata from one of the tiles
+    gdalInfo = getImageGeoInfo(tilePaths[0])
+    
+    num_bands = len(gdalInfo['band_info'])
+    data_type = gdalInfo['band_info'][0]['type']
+
+    # This special metadata value is only used for ASP stereo point cloud files!    
+    if 'point_offset' in gdalInfo:
+        f.write("  <Metadata>\n    <MDI key=\"" + 'POINT_OFFSET' + "\">" +
+                gdalInfo['point_offset'][0] + "</MDI>\n  </Metadata>\n")
+      
+
+    # Write each band
+    for b in range( 1, num_bands + 1 ):
+        f.write("  <VRTRasterBand dataType=\"%s\" band=\"%i\">\n" % (data_type, b) ) # Write band data type and index
+
+        for tile, tileLoc in zip(tilePaths, tileLocs):
+            filename  = tile
+            
+            imageSize = getImageSize(filename) # Get the image size for this tile
+
+            ## Replace missing tile paths with the good tile we found earlier
+            #if not os.path.isfile(filename): filename = goodFilename
+
+            relative = os.path.relpath(filename, outputPath) # Relative path from the output file to the input tile
+            f.write("    <SimpleSource>\n")
+            f.write("       <SourceFilename relativeToVRT=\"1\">%s</SourceFilename>\n" % relative) # Write relative path
+            f.write("       <SourceBand>%i</SourceBand>\n" % b)
+            f.write("       <SrcRect xOff=\"%i\" yOff=\"%i\" xSize=\"%i\" ySize=\"%i\"/>\n" % (tileLoc[0], tileLoc[1], imageSize[0], imageSize[1]) ) # Source ROI (entire tile)
+            f.write("       <DstRect xOff=\"%i\" yOff=\"%i\" xSize=\"%i\" ySize=\"%i\"/>\n" % (tileLoc[0], tileLoc[1], imageSize[0], imageSize[1]) ) # Output ROI (entire tile)
+            f.write("    </SimpleSource>\n")
+        f.write("  </VRTRasterBand>\n")
+    f.write("</VRTDataset>\n")
+    f.close()    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 

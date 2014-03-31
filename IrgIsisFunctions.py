@@ -53,7 +53,7 @@ def isIsisFile(filePath):
 
     # Currently we treat all files with .cub extension as ISIS files
     extension = os.path.splitext(filePath)[1]
-    return (extension == 'cub')
+    return (extension == '.cub')
 
 
 def parseHeadOutput(headText, cubePath):
