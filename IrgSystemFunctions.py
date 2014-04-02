@@ -54,7 +54,18 @@ def isNotString(a):
     
 def argListToString(argList):
     """Converts a list of arguments into a single argument string"""
-    return " ".join(argList)
+    
+    string = ""
+    for arg in argList:
+        stringVersion = str(arg)
+        
+        # Wrap arguments with spaces in them in "" so they stay together
+        if stringVersion.find(' ') >= 0:
+            string = string + '"' + stringVersion + '" '
+        else:
+            string = string + stringVersion + ' '
+    
+    return string
 
 def stringToArgList(string):
     """Converts a single argument string into a list of arguments"""

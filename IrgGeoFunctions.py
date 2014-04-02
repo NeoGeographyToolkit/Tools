@@ -97,11 +97,11 @@ def getImageGeoInfo(imagePath):
         bandInfo = {}
         
         # Get the type string
-        bandLine = IrgStringFunctions.getLineAfterText('bandString')
+        bandLine = IrgStringFunctions.getLineAfterText(textOutput, bandString)
         typePos  = bandLine.find('Type=')
         commaPos = bandLine.find(',')
         typeName = bandLine[typePos+5:commaPos-1]
-        bandInfo['type'] = typename
+        bandInfo['type'] = typeName
         
         outputDict['band_info'] = bandInfo
         

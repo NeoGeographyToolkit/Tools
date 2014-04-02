@@ -321,7 +321,8 @@ def main(argsIn):
     if options.suppressOutput:
         commandList = commandList + ['--suppress-output']
     commandList   = commandList + options.extraArgs # Append other options
-    commandString = IrgSystemFunctions.argListToString(commandList)    
+    commandString = IrgSystemFunctions.argListToString(commandList)
+   
     
     # Use GNU parallel call to distribute the work across computers
     # - This call will wait until all processes are finished
