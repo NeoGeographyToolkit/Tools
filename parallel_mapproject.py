@@ -289,7 +289,7 @@ def main(argsIn):
 
     # TODO: Move this to the lower level functions
     # If using multiple computers, need to make sure the same program paths are available
-    if options.nodesList:
+    if options.nodesListPath:
         parallelArgs = parallelArgs + ['--env', 'PATH', '--env', 'PYTHONPATH', '--env', 'ISISROOT', '--env', 'ISIS3DATA']
     
     # Get the number of available nodes and CPUs per node
