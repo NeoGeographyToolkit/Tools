@@ -148,7 +148,7 @@ def main(argsIn):
                                            help='The list of computing nodes, one per line. ' + \
                                                 'If not provided, run on the local machine.')
 
-        parser.add_option('--tile-size',  dest='tileSize', default=1000,
+        parser.add_option('--tile-size',  dest='tileSize', default=1000, type='int',
                                            help='Size of square tiles to break up processing in to.')
 
 
@@ -204,10 +204,10 @@ def main(argsIn):
         if len(requiredList) < 3:
             parser.error("Need output path")
 
-        options.demPath    = requiredList[0]
-        options.imagePath  = requiredList[1]
-        options.outputPath = requiredList[2]
-
+        # Make sure we have absolute paths here
+        options.demPath    = os.path.abspath(requiredList[0])
+        options.imagePath  = os.path.abspath(requiredList[1])
+        options.outputPath = os.path.abspath(requiredList[2])
 
         # Any additional arguments need to be forwarded to the mapproject function
         options.extraArgs = optionsList
@@ -283,8 +283,14 @@ def main(argsIn):
         argumentFile.write(str(tile[0]) + '\t' + str(tile[1]) + '\t' + str(tile[2]) + '\t' + str(tile[3]) + '\n')
     argumentFile.close()
     
+
     # Indicate to GNU Parallel that there are multiple tab-seperated variables in the text file we just wrote
     parallelArgs = ['--colsep', "\\t"]
+
+    # TODO: Move this to the lower level functions
+    # If using multiple computers, need to make sure the same program paths are available
+    if options.nodesList:
+        parallelArgs = parallelArgs + ['--env', 'PATH', '--env', 'PYTHONPATH', '--env', 'ISISROOT', '--env', 'ISIS3DATA']
     
     # Get the number of available nodes and CPUs per node
     numNodes = IrgPbsFunctions.getNumNodesInList(options.nodesListPath)
@@ -293,7 +299,7 @@ def main(argsIn):
     cpusPerNode = IrgSystemFunctions.get_num_cpus()
     
     # We don't actually know the best number here!
-    threadsPerCpu = 4
+    threadsPerCpu = 2
     
     # Set the optimal number of processes if the user did not specify
     if not options.numProcesses:
@@ -326,7 +332,7 @@ def main(argsIn):
     
     # Use GNU parallel call to distribute the work across computers
     # - This call will wait until all processes are finished
-    IrgPbsFunctions.runInGnuParallel(options.numProcesses, commandString, argumentFilePath, parallelArgs, options.nodesListPath, not options.suppressOutput)
+    IrgPbsFunctions.runInGnuParallel(options.numProcesses, commandString, argumentFilePath, parallelArgs, options.nodesListPath, True)#not options.suppressOutput)
 
 
     # Build a gdal VRT file which is composed of all the processed tiles
