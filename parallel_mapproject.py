@@ -342,7 +342,7 @@ def main(argsIn):
     os.system(cmd)
     
     # Convert VRT file to final output file
-    cmd = "gdal_translate -co compress=lzw " + vrtPath + " " + options.outputPath;
+    cmd = "gdal_translate -co compress=lzw -co bigtiff=yes " + vrtPath + " " + options.outputPath;
     print cmd
     os.system(cmd)
     #IrgSystemFunctions.executeCommand(cmd, False, True)
