@@ -163,11 +163,10 @@ def getGeoTiffBoundingBox(geoTiffPath):
         raise Exception('Error: getGeoTiffBoundingBox failed on input image: ' + geoTiffPath)
     
     # Parse the output
-    lines = textOutput.split('\n')
-    minLat = float( lines[0][ lines[0].find('=')+1 :] )
-    maxLat = float( lines[1][ lines[1].find('=')+1 :] )
-    minLon = float( lines[2][ lines[2].find('=')+1 :] )
-    maxLon = float( lines[3][ lines[3].find('=')+1 :] )
+    minLat = float( IrgStringFunctions.getLineAfterText(textOutput, 'Min latitude  =') )
+    maxLat = float( IrgStringFunctions.getLineAfterText(textOutput, 'Max latitude  =') )
+    minLon = float( IrgStringFunctions.getLineAfterText(textOutput, 'Min longitude =') )
+    maxLon = float( IrgStringFunctions.getLineAfterText(textOutput, 'Max longitude =') )
     
     return (minLon, maxLon, minLat, maxLat)
 
@@ -176,11 +175,11 @@ def getImageBoundingBox(filePath):
     """Returns (minLon, maxLon, minLat, maxLat) for a georeferenced image file"""
 
     extension = os.path.splitext(filePath)[1]
-    if '.tif' in extension:
-        return getGeoTiffBoundingBox(filePath)
-    else:
+    if '.cub' in extension:
         return IrgIsisFunctions.getIsisBoundingBox(filePath)
-    
+    else: # Handle all other types
+        return getGeoTiffBoundingBox(filePath)
+          
     # Any other file types will end up raising some sort of exception
     
     

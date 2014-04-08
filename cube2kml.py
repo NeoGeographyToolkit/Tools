@@ -85,7 +85,7 @@ def main():
         outputFolder = os.path.dirname(outputPath)
 
         # Get the four corners of the cube
-        bb = IrgIsisFunctions.getIsisBoundingBox(cubePath)
+        bb = IrgGeoFunctions.getImageBoundingBox(cubePath)
         
         # Generate a kml plot of the cube
         generateKml(bb, outputPath)

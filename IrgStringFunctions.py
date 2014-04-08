@@ -51,7 +51,9 @@ def getLineAfterText(text, prefix, startPos=0, includeText=False):
     # Find the bounds after the prefix
     prefixEnd = prefixLoc + len(prefix)
     nextEnd   = text.find('\n', prefixEnd)
-    
+    if nextEnd == -1: # If there was no trailing \n, use one past last character.
+        nextEnd = len(text) 
+
     # Check that we found the bounds
     if (prefixEnd < startPos) or (nextEnd <= prefixEnd):
         raise Exception('Desired text not found: ' + prefix)
