@@ -194,8 +194,8 @@ target_link_libraries(lola_compare  ${VISIONWORKBENCH_LIBRARIES})
 add_executable(matchBinaryToCsv matchBinaryToCsv.cc) 
 target_link_libraries(matchBinaryToCsv  ${VISIONWORKBENCH_LIBRARIES}) 
 
-add_executable(getLatLonBounds getLatLonBounds.cc) 
-target_link_libraries(getLatLonBounds  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(geoRefTool geoRefTool.cc) 
+target_link_libraries(geoRefTool  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(maskFromIntersectError maskFromIntersectError.cc) 
 target_link_libraries(maskFromIntersectError  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES}) 

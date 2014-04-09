@@ -45,6 +45,7 @@ def getGdalInfoTagValue(text, tag):
     except Exception: # Requested tag was not found
         return None
 
+# TODO: This can take a long time due to the stats call!
 def getImageGeoInfo(imagePath):
     """Obtains some image geo information from gdalinfo in dictionary format"""
     
@@ -154,7 +155,7 @@ def getGeoTiffBoundingBox(geoTiffPath):
     """Returns (minLon, maxLon, minLat, maxLat) for a geotiff image"""
     
     # Call command line tool silently
-    cmd = ['getLatLonBounds', geoTiffPath]
+    cmd = ['geoRefTool --printBounds', geoTiffPath]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     textOutput, err = p.communicate()
 
