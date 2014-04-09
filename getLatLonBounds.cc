@@ -83,18 +83,18 @@ int main( int argc, char *argv[] )
 
 
 
-  // Load the input DEM
-  ImageView<PixelGray<float> > inputImage;
-  cartography::GeoReference georef;
-  if (!read_georeferenced_image(inputImage, georef, inputImagePath))
+  // Load the input DEM georeference
+  cartography::GeoReference georef; 
+  boost::scoped_ptr<DiskImageResource> inputImage(DiskImageResource::open(inputImagePath));
+  if (!read_georeference(georef, *inputImage))
   {
     //vw_out() << "Failed to read input image!\n";
-    std::cout << "Failed to read input image!\n";
+    std::cout << "Failed to read input image georeference!\n";
     return false;
   }
 
   // Compute the GDC bounding box of the entire image
-  BBox2 fullImageBox(Vector2(0,0), Vector2(inputImage.cols(), inputImage.rows()));
+  BBox2 fullImageBox(Vector2(0,0), Vector2(inputImage->cols(), inputImage->rows()));
   BBox2 gdcBox = georef.pixel_to_lonlat_bbox(fullImageBox);
 
   // Print out the results
@@ -107,7 +107,7 @@ int main( int argc, char *argv[] )
   std::cout <<   "Min latitude  = " << gdcBox.min()[1]
             << "\nMax latitude  = " << gdcBox.max()[1]
             << "\nMin longitude = " << gdcBox.min()[0]
-            << "\nMax longitude = " << gdcBox.max()[0];
+            << "\nMax longitude = " << gdcBox.max()[0] << "\n";
 
 
   return 0;
