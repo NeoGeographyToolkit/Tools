@@ -62,16 +62,18 @@ public:
     // - Number of output levels = 1 + number of thresholds
     // - Outputs will be 0, 1*m_scaleVal, 2*m_scaleVal, ...
     if (scale)
-      m_scaleVal = 255.0f / float(thresholdValues.size());
-    //m_maxVal = m_scaleVal * float(thresholdValues.size());
-
+      m_scaleVal = 255.0f / float(thresholdValues.size() + 1); // Add one since the highest level is reserved for NODATA
   }
 
   float getScaleValue() const { return m_scaleVal; }
 
   /// Assign each pixel a value based on the threshold values.
-  inline PixelGray<uint8> operator() (PixelRGB<float> const &p) const
+  inline PixelGray<uint8> operator() (PixelMask<PixelRGB<float> > const &p) const
   {
+    // The color 255 is reserved for invalid pixels
+    if (!is_valid(p))
+      return PixelGray<uint8>(255);
+  
     float valueSquared = p[0]*p[0] + p[1]*p[1] + p[2]*p[2];
     uint8 bin = 0;
     for (size_t i=0; i<m_ValsSquared.size(); ++i)
@@ -88,7 +90,6 @@ public:
 private:
   std::vector<float> m_ValsSquared;
   float m_scaleVal;
-  //float m_maxVal; //TODO: Reverse confidence plot?
 };
 
 
@@ -148,12 +149,24 @@ int main( int argc, char *argv[] ) {
     vw::DiskImageView<PixelRGB<float> > inputImage(inputImagePath);
 
 
+    // Attempt to extract nodata value
+    float noDataValue = -1;
+    SrcImageResource *imageResource = DiskImageResource::open(inputImagePath);
+    if ( imageResource->has_nodata_read() ) {
+      noDataValue = imageResource->nodata_read();
+      std::cout << "\t--> Extracted nodata value from file: " << noDataValue << ".\n";
+    }
+    else
+      vw_throw( vw::ArgumentErr() << "Failed to extract NODATA value!\n\n");
+    
+
     // Set up thresholding function
     SumSquaredThreshFunctor threshFunctor(thresholdValues, scaleOutput);
-    ImageViewRef<PixelGray<vw::uint8> > mask = vw::per_pixel_filter(inputImage, threshFunctor);
+    ImageViewRef<PixelGray<vw::uint8> > outputView = vw::per_pixel_filter(create_mask( inputImage, noDataValue), 
+                                                                          threshFunctor);
 
     // Set up output file
-    boost::scoped_ptr<DiskImageResource> r(DiskImageResource::create(outputImagePath, mask.format()));
+    boost::scoped_ptr<DiskImageResource> r(DiskImageResource::create(outputImagePath, outputView.format()));
 
     // Copy georeference information from the input image
     vw::cartography::GeoReference georef;
@@ -161,7 +174,7 @@ int main( int argc, char *argv[] ) {
     write_georeference( *r, georef );
 
     // Do everything!
-    vw::block_write_image( *r, mask,
+    vw::block_write_image( *r, outputView,
                           vw::TerminalProgressCallback( "maskFromIntersectError", "Generating mask:") );
 
     // Write out a legend text file if the user requested it
@@ -170,7 +183,8 @@ int main( int argc, char *argv[] ) {
       legendFile << "Error threshold, Pixel value" << std::endl;
       legendFile << "0, 0" << std::endl;
       for (size_t i=0; i<thresholdValues.size(); ++i)
-        legendFile << thresholdValues[i] << ", " << (i+1) * threshFunctor.getScaleValue() << std::endl;
+        legendFile << thresholdValues[i] << ", " << (int)((i+1) * threshFunctor.getScaleValue()) << std::endl;
+      legendFile << "NODATA, 255" << std::endl;
       legendFile.close();
 
       if (legendFile.fail()) // Handle errors writing the legend file
