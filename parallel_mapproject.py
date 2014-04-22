@@ -18,10 +18,17 @@
 # __END_LICENSE__
 
 import sys
-
 import os, glob, re, shutil, subprocess, string, time, errno, optparse, math
-
 import IrgFileFunctions, IrgIsisFunctions, IrgPbsFunctions, IrgSystemFunctions
+
+if sys.version_info < (2, 6, 0):
+    print('\nERROR: Must use Python 2.6 or greater.')
+    sys.exit(1)
+
+# Add the path to the script to the system path, so that GNU
+# Parallel can find it.
+path = sys.path[0]
+os.environ["PATH"] = path + os.pathsep + os.environ["PATH"]
 
 def man(option, opt, value, parser):
     print >>sys.stderr, parser.usage
