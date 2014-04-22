@@ -58,9 +58,4 @@ point_to_dem_dist.cc      = Compute the distance from a set of points to a DEM b
 
 stereoIpFind.cc           = Search for a set of matching pixel pairs in two images and write them to a binary match file.
 
-
-
-
-
-
-
+blur_dem.cc               = Convolve a DEM with exp(-sigma*x^2).

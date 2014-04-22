@@ -212,6 +212,9 @@ target_link_libraries(point_to_dem_dist  ${VISIONWORKBENCH_LIBRARIES} ${StereoPi
 add_executable(dem_mean_std dem_mean_std.cc) 
 target_link_libraries(dem_mean_std  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
 
+add_executable(blur_dem blur_dem.cc) 
+target_link_libraries(blur_dem ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
+
 # ASP Viewer 
 
 # Source files
