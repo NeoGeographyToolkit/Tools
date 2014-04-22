@@ -88,15 +88,33 @@ def getLastGitTag(codePath):
 
     return textOutput
 
-def tarFileList(fileList, outputPath):
+def tarFileList(fileList, outputPath, replacementNameList=None):
     """Creates a tar file containing a list of files with no absolute paths"""
 
-    # This extra set of commands is needed to strip the absolute path name from each stored file
+    # An extra set of commands is needed to strip the absolute path name from each stored file
     cmd = 'tar -jcvf ' + outputPath
-    for f in fileList:
-        cmd = cmd + ' -C ' + os.path.dirname(f) + ' ' + os.path.basename(f)
+    if not replacementNameList: # Add all the files as they are
+        for f in fileList:
+            cmd = cmd + ' -C ' + os.path.dirname(f) + ' ' + os.path.basename(f) # Add the current path
+    else: # Use the replacement names for the files
+        for (f, r) in zip(fileList, replacementNameList):
+            os.rename(f, r) # Temporarily replace the file path
+            cmd = cmd + ' -C ' + os.path.dirname(r) + ' ' + os.path.basename(r) # Add the new path
+    # Command set up, now run it!    
     print cmd
     os.system(cmd)
+    
+    if replacementNameList: # Move all the files back to their original locations
+        for (f, r) in zip(fileList, replacementNameList):
+            os.rename(r, f)
+    
+    
+
+
+
+
+
+
 
 def stripRgbImageAlphaChannel(inputPath, outputPath):
     """Makes an RGB copy of an RBGA image"""
