@@ -160,7 +160,7 @@ void appWindow::createMenusAndMainWidget(const cmdLineOptions & opt){
   view->insertItem("Change display order", m_poly, SLOT(changeOrder()),  Qt::Key_O);
   Q3PopupMenu* help = new Q3PopupMenu( menu );
   menu->insertItem("Help", help);
-  help->insertItem("Show documentation", this, SLOT(showDoc()));
+  //help->insertItem("Show documentation", this, SLOT(showDoc()));
   help->insertItem("About", this, SLOT(about()));
 
   return;
