@@ -54,8 +54,9 @@ appWindow::appWindow(QWidget* parent, std::string progName,
 }
 
 void appWindow::resizeEvent(QResizeEvent *){
-  m_chooseFiles->setMaximumSize(int(m_widRatio*size().width()),
-                                size().height());
+  if (m_chooseFiles)
+    m_chooseFiles->setMaximumSize(int(m_widRatio*size().width()),
+                                  size().height());
 }
 
 void appWindow::closeEvent(QCloseEvent *){
@@ -123,28 +124,25 @@ void appWindow::createMenusAndMainWidget(const cmdLineOptions & opt){
   Q3PopupMenu* file = new Q3PopupMenu( menu );
   menu->insertItem("File", file);
 
-  
-  // Central widget
-  QWidget * mainWidget = new QWidget(this);
-  
-  //setCentralWidget(m_poly);
-  setCentralWidget(mainWidget);
+  if (opt.polyOptionsVec.size() > 2){
+    QWidget * mainWidget;
+    mainWidget = new QWidget(this);
+    setCentralWidget(mainWidget);
+    QSplitter *splitter = new QSplitter(mainWidget);
+    m_chooseFiles = new chooseFilesDlg(this, opt.polyOptionsVec);
+    m_chooseFiles->setMaximumSize(int(m_widRatio*size().width()), size().height());
+    m_poly = new aspView (mainWidget, m_chooseFiles, opt);
+    splitter->addWidget(m_chooseFiles);
+    splitter->addWidget(m_poly);
 
-  // The layout having the file names. It will be filled in dynamically later.
-  m_chooseFiles = new chooseFilesDlg(this, opt.polyOptionsVec);
-  m_chooseFiles->setMaximumSize(int(m_widRatio*size().width()), size().height());
+    QGridLayout *layout = new QGridLayout(mainWidget);
+    layout->addWidget (splitter, 0, 0, 0);
+    mainWidget->setLayout (layout);
+  }else{
+    m_poly = new aspView (this, NULL, opt);
+    setCentralWidget(m_poly);
+  }
   
-  m_poly = new aspView (mainWidget, m_chooseFiles, opt);
-  //m_poly->setMinimumSize(0.7*size().width(), size().height()); // fix here!
-  
-  QSplitter *splitter = new QSplitter(mainWidget);
-  splitter->addWidget(m_chooseFiles);
-  splitter->addWidget(m_poly);
-
-  QGridLayout *layout = new QGridLayout(mainWidget);
-  layout->addWidget (splitter, 0, 0, 0);
-  mainWidget->setLayout (layout);
-
   m_poly->setFocusPolicy(Qt::StrongFocus);
   m_poly->setFocus();
 

@@ -64,12 +64,14 @@ aspView::aspView(QWidget *parent, chooseFilesDlg *chooseFilesDlgPtr,
   installEventFilter(this);
 
   // Choose which files to hide/show in the GUI
-  QObject::connect(m_chooseFilesDlg->getFilesTable(),
-                   SIGNAL(itemClicked(QTableWidgetItem *)),
-                   this,
-                   SLOT(showFilesChosenByUser())
+  if (m_chooseFilesDlg){
+    QObject::connect(m_chooseFilesDlg->getFilesTable(),
+                     SIGNAL(itemClicked(QTableWidgetItem *)),
+                     this,
+                     SLOT(showFilesChosenByUser())
                    );
-
+  }
+  
   setAttribute(Qt::WA_Hover); // To be able to do hovering
   
   // Preferences per polygon file. The element in the vector
@@ -820,14 +822,18 @@ void aspView::readAllPolys(){
 }
 
 void aspView::chooseFilesToShow(){
-  m_chooseFilesDlg->chooseFiles(m_polyOptionsVec);
   // User's choice is processed in showFilesChosenByUser().
+  if (m_chooseFilesDlg)
+    m_chooseFilesDlg->chooseFiles(m_polyOptionsVec);
   return;
 }
 
 void aspView::showFilesChosenByUser(){
   
   // Process user's choice from chooseFilesToShow().
+
+  if (!m_chooseFilesDlg)
+    return;
 
   m_filesToHide.clear();
   QTableWidget * filesTable = m_chooseFilesDlg->getFilesTable();
