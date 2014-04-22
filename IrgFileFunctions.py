@@ -98,6 +98,12 @@ def tarFileList(fileList, outputPath):
     print cmd
     os.system(cmd)
 
+def stripRgbImageAlphaChannel(inputPath, outputPath):
+    """Makes an RGB copy of an RBGA image"""
+    cmd = 'gdal_translate ' + inputPath + ' ' + outputPath + ' -b 1 -b 2 -b 3 -co "COMPRESS=LZW" -co "TILED=YES" -co "BLOCKXSIZE=256" -co "BLOCKYSIZE=256"'
+    print cmd
+    os.system(cmd)
+
 
 
 
