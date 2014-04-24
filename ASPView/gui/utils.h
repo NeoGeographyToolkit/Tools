@@ -29,18 +29,21 @@
 
 namespace utils{
 
+  /// Return pointer to first element in a vector
   template<class T>
   const T * vecPtr(const std::vector<T>& X){
     if (X.size() == 0) return NULL;
     else               return &X.front();   
   }
 
+  /// Return pointer to first element in a vector
   template<class T>
   T * vecPtr(std::vector<T>& X){
     if (X.size() == 0) return NULL;
     else               return &X.front();   
   }
 
+  /// Convert any number to an std::string object
   template<class T>
   std::string num2str(T num){
     std::ostringstream S;
@@ -48,10 +51,12 @@ namespace utils{
     return S.str();
   }
 
+  /// Return euclidean distance between two coordinates
   inline double distance(double x0, double y0, double x1, double y1){
     return sqrt( (x1 - x0)*(x1 - x0) + (y1 - y0)*(y1 - y0) );
   }
   
+  /// Set of functions to call basic match functions on doubles and convert to integers.
   inline int iround(double x){ return (int)round(x); }
   inline int iceil (double x){ return (int)ceil( x); }
   inline int ifloor(double x){ return (int)floor(x); }
@@ -61,12 +66,14 @@ namespace utils{
     return 0;
   }
   
+  /// Update corners of box to match the input aspect ratio with the same center location.
   void expandBoxToGivenRatio(// inputs
                              double aspectRatio, 
                              // inputs/outputs
                              double & xll,  double & yll,
                              double & widx, double & widy);
   
+  /// TODO
   struct valIndex{
     double val;
     int    index;
@@ -74,10 +81,16 @@ namespace utils{
     int    nextIndexInward; // Useful only when isOutward is true
   };
 
+  /// Find the point at which the horizontal or vertical line
+  ///  nx*x + ny*y = H intersects the edge (x0, y0) --> (x1, y1).
   void cutEdge(double x0, double y0, double x1, double y1,
                double nx, double ny, double H,
                double & cutx, double & cuty);
   
+  /// Cut a polygonal line. First make it into a polygon by traveling
+  /// forward and then backward on the polygonal line, then cut the
+  /// obtained polygon, then remove the backward portion from each
+  /// obtained polygon.
   void cutPolyLine(// inputs -- the polygonal line
                    int numVerts,
                    const double * xv, const double * yv,
@@ -88,6 +101,9 @@ namespace utils{
                    std::vector< double> & cutY,
                    std::vector< int>    & cutNumPolys);
   
+  /// Cut a given polygon with a box.
+  ///   Intersect the polygon with each of the the half-planes
+  ///   nx*x + ny*y <= (nx + ny)*H.
   void cutPoly(// inputs -- the polygons
                int numPolys, const int * numVerts,
                const double * xv, const double * yv,
@@ -98,10 +114,13 @@ namespace utils{
                std::vector< double> & cutY,
                std::vector< int>    & cutNumPolys);
 
+  /// Used to compare two valIndex objects
   inline bool lessThan (valIndex A, valIndex B){ return A.val < B.val; }
   
+  /// TODO
   void processPointsOnCutline(std::vector<valIndex> & ptsOnCutline);
 
+  /// TODO
   void cutToHalfSpace(// inputs 
                       double nx, double ny, double dotH,
                       int numV, 
@@ -219,12 +238,14 @@ namespace utils{
   
   };
   
+  /// Generate a bounding box containing a set of polynomial objects.
   void bdBox(const std::vector<dPoly> & polyVec,
              // outputs
              double & xll, double & yll,
              double & xur, double & yur
              );
   
+  /// Given a set of polygons, set up a box containing these polygons.
   void setUpViewBox(// inputs
                     const std::vector<dPoly> & polyVec,
                     // outputs
@@ -263,30 +284,39 @@ namespace utils{
   
   };
 
+  /// Stores input options from the command line
   struct cmdLineOptions{
     std::vector<polyOptions> polyOptionsVec;
-    int windowWidX;
-    int windowWidY;
-    cmdLineOptions();
+    int windowWidX; ///< Window width  in pixels
+    int windowWidY; ///< Window height in pixels
+
+    cmdLineOptions(); ///< Default constructor
   };
 
   std::string getDocText();
   
+  /// Read and clear the window dimension arguments from the command line.
   void extractWindowDims(// inputs
                          int numArgs, char ** args,
                          // outputs
                          int & windowWidX, int & windowWidY
                          );
 
+  /// Manually parse all of the command line options and store in 'options'
+  /// - Not many options yet!
   void parseCmdOptions(//inputs
                        int argc, char** argv, std::string exeName,
                        // outputs
                        cmdLineOptions & options
                        );
 
+  /// Print command line options
   void printUsage(std::string progName);
 
+  /// Returns the file extension.
   std::string getFilenameExtension(std::string filename);
+
+  /// Replace text occurences in a string.
   std::string replaceAll(std::string result, 
                          const std::string & replaceWhat, 
                          const std::string & replaceWithWhat);

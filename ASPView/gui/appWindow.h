@@ -22,15 +22,20 @@
 #include <QEvent>
 #include <string>
 #include <vector>
+
 class aspView;
 class chooseFilesDlg;
 class QResizeEvent;
 class QCloseEvent;
 class QTextEdit;
+
+// Do this to hide include the file.
 namespace utils{
   class cmdLineOptions;
 }
 
+
+/// Simple window class to display HTML text
 class docWindow: public QMainWindow{
   Q_OBJECT
 
@@ -42,34 +47,42 @@ private:
   QTextEdit * m_textArea;
 };
 
+
+
+
+/// Class for the main GUI window
 class appWindow : public QMainWindow {
   Q_OBJECT
 
 public:
+  /// Constructor
   appWindow(QWidget* parent, std::string progName,
             const utils::cmdLineOptions & options);
   ~appWindow();
   
 protected:
+
+  /// Override default QT handling of some events.
   bool eventFilter(QObject *obj, QEvent *event);
 
 private slots:
-void createMenusAndMainWidget(const utils::cmdLineOptions & opt);
-  void showDoc();
-  void about();
-  void shiftUp();
-  void shiftDown();
-  void forceQuit();
+  void createMenusAndMainWidget(const utils::cmdLineOptions & opt);
+  void showDoc();    ///< Pop up documentation window?
+  void about();      ///< Pop up a little message box with program information.
+  void shiftUp();    ///< Redirect call to aspView object.
+  void shiftDown();  ///< Redirect call to aspView object.
+  void forceQuit();  ///< Ensure the program shuts down.
   
 private:
+  // Event handlers
   void resizeEvent(QResizeEvent *);
-  void closeEvent(QCloseEvent *);
+  void closeEvent (QCloseEvent *);
 
-  double           m_widRatio;
-  chooseFilesDlg * m_chooseFiles;
-  aspView        * m_poly;
-  std::string      m_progName;
-  docWindow        m_docWindow;
+  double           m_widRatio;    ///< This is size of the window is controlled?
+  chooseFilesDlg * m_chooseFiles; ///< Panel on right side for selecting files.
+  aspView        * m_poly;        ///< Central image panel.
+  std::string      m_progName;    ///< Name of the program.
+  docWindow        m_docWindow;   ///< Documentation window instance.
 };
 
 

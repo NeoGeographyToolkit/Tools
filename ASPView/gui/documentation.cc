@@ -24,6 +24,8 @@
 #include "utils.h"
 using namespace std;
 
+//TODO: How much of this is useful to keep?
+
 std::string utils::getDocText(){
 
   // Begin auto-generated text

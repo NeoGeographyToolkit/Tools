@@ -27,6 +27,8 @@ class QTableWidget;
 namespace utils{
   class polyOptions;
 }
+
+/// Class to create a file list on the left side of the window
 class chooseFilesDlg: public QWidget{
   Q_OBJECT
   
@@ -35,6 +37,7 @@ public:
                  const std::vector<utils::polyOptions> & optionsVec);
   ~chooseFilesDlg();
   void chooseFiles(const std::vector<utils::polyOptions> & optionsVec);
+
   QTableWidget * getFilesTable(){ return m_filesTable; }
   static QString selectFilesTag(){ return ""; }
 private:

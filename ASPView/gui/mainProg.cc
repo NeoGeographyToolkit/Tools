@@ -29,6 +29,7 @@ using namespace utils;
 
 int main(int argc, char** argv){
 
+
   char * exeName = argv[0];
   cmdLineOptions options;
   parseCmdOptions(// inputs
@@ -37,13 +38,16 @@ int main(int argc, char** argv){
                   options
                   );
   
+  // Initialize QT application instance with command line arguments
   QApplication app(argc, argv);
+
+  // Create instance of appWindow class
   string progName = "aspview";
-  
   appWindow m(NULL, progName, options);
   m.setCaption(progName.c_str());
   m.show();
   
+  /// Tell QT to shut down the program when the window is closed.
   QObject::connect( qApp, SIGNAL(lastWindowClosed()), qApp, SLOT(quit()) );
   
   return app.exec();

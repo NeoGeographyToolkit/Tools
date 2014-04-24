@@ -37,6 +37,8 @@
 using namespace std;
 using namespace utils;
 
+
+
 appWindow::appWindow(QWidget* parent, std::string progName,
                      const cmdLineOptions & options):
   QMainWindow(parent, progName.c_str()),
@@ -55,8 +57,7 @@ appWindow::appWindow(QWidget* parent, std::string progName,
 
 void appWindow::resizeEvent(QResizeEvent *){
   if (m_chooseFiles)
-    m_chooseFiles->setMaximumSize(int(m_widRatio*size().width()),
-                                  size().height());
+    m_chooseFiles->setMaximumSize(int(m_widRatio*size().width()), size().height());
 }
 
 void appWindow::closeEvent(QCloseEvent *){
@@ -120,14 +121,18 @@ void appWindow::createMenusAndMainWidget(const cmdLineOptions & opt){
   // the main widget is created before the menus then it gets
   // incorrect geometry.
   
+  // Create the menu bar
   QMenuBar* menu = menuBar();
   Q3PopupMenu* file = new Q3PopupMenu( menu );
   menu->insertItem("File", file);
 
+  // Create the main panel
   if (opt.polyOptionsVec.size() > 2){
+
     QWidget * mainWidget;
     mainWidget = new QWidget(this);
     setCentralWidget(mainWidget);
+
     QSplitter *splitter = new QSplitter(mainWidget);
     m_chooseFiles = new chooseFilesDlg(this, opt.polyOptionsVec);
     m_chooseFiles->setMaximumSize(int(m_widRatio*size().width()), size().height());
@@ -138,6 +143,7 @@ void appWindow::createMenusAndMainWidget(const cmdLineOptions & opt){
     QGridLayout *layout = new QGridLayout(mainWidget);
     layout->addWidget (splitter, 0, 0, 0);
     mainWidget->setLayout (layout);
+
   }else{
     m_poly = new aspView (this, NULL, opt);
     setCentralWidget(m_poly);
@@ -146,6 +152,7 @@ void appWindow::createMenusAndMainWidget(const cmdLineOptions & opt){
   m_poly->setFocusPolicy(Qt::StrongFocus);
   m_poly->setFocus();
 
+  // Finish populating the menu bar
   file->insertItem("Exit", this, SLOT(forceQuit()), Qt::Key_Q);
 
   Q3PopupMenu* view = new Q3PopupMenu( menu );
@@ -190,8 +197,13 @@ void appWindow::about(){
   return;
 }
 
+
+//========================================================================================
+// Functions for docWindow class
+
 docWindow::docWindow(QWidget *){
   resize(900, 800);
+  // Create text area then populate it
   m_textArea = new QTextEdit (this); 
   setCentralWidget (m_textArea); 
 }

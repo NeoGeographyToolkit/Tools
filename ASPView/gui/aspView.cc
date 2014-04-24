@@ -130,7 +130,7 @@ bool aspView::eventFilter(QObject *obj, QEvent *E){
 
 void aspView::setupViewingWindow(){
 
-  // Dimensions of the plotting window in pixels exluding any window
+  // Dimensions of the plotting window in pixels excluding any window
   // frame/menu bar/status bar
   QRect v       = this->geometry();
   m_screenXll   = v.left();
@@ -220,6 +220,7 @@ void aspView::displayData( QPainter *paint ){
   // Will draw a vertex with a shape dependent on this index
   int drawVertIndex = -1; 
 
+  // Loop through each of the polygons
   assert( m_polyVec.size() == m_polyOptionsVec.size() );
   for (int vi  = 0; vi < (int)m_polyVec.size(); vi++){
 
@@ -292,13 +293,14 @@ void aspView::plotDPoly(bool plotPoints, bool plotEdges,
   BBox2i wBox, pBox; // box in world and pixel coordinates
   int x0, y0;
   int start = 0;
-  for (int pIter = 0; pIter < numPolys; pIter++){
+  for (int pIter = 0; pIter < numPolys; pIter++){ // For each polygon
       
     if (pIter > 0) start += numVerts[pIter - 1];
       
     int pSize = numVerts[pIter];
     if (pSize <= 0) continue;
 
+    // Expand bounding boxes to contain each vertex
     for (int vIter = 0; vIter < pSize; vIter++){
 
       worldToPixelCoords(xv[start + vIter], yv[start + vIter], // inputs
@@ -315,6 +317,8 @@ void aspView::plotDPoly(bool plotPoints, bool plotEdges,
     wBox.max().y() = currPoly.m_img.rows() - a;
     wBox.crop(bounding_box(currPoly.m_img));
       
+    //TODO: This should be turned into a function!
+    // Rasterize a VW image into a QT image in the requested area
     ImageView<float> img = crop(currPoly.m_img, wBox);
     QImage qimg(img.cols(), img.rows(), QImage::Format_RGB888);
     for (int x = 0; x < img.cols(); ++x) {
@@ -323,6 +327,7 @@ void aspView::plotDPoly(bool plotPoints, bool plotEdges,
       }
     }
       
+    // Have QT draw the image in the correct location
     QRect rect(pBox.min().x(), pBox.min().y(),
                pBox.width(), pBox.height());
     paint->drawImage (rect, qimg);
@@ -395,6 +400,7 @@ void aspView::mousePressEvent( QMouseEvent *E){
        << m_mousePrsX << ' ' << m_mousePrsY << endl;
 #endif
 
+  // Init rubber band to empty status
   m_rubberBand = m_emptyRubberBand;
 
   return;
@@ -408,6 +414,7 @@ void aspView::mouseMoveEvent( QMouseEvent *E){
   double wx, wy;
   pixelToWorldCoords(x, y, wx, wy);
 
+  // Redraw the rubber band at the current mouse location
   refreshPixmap(); // To do: Need to update just a small region, not the whole screen
   // Standard Qt rubberband trick (kind of confusing as to how it works).
   updateRubberBand(m_rubberBand);
@@ -423,7 +430,7 @@ void aspView::mouseReleaseEvent ( QMouseEvent * E ){
   const QPoint Q = E->pos();
   m_mouseRelX = Q.x();
   m_mouseRelY = Q.y();
-#if 0
+#if 0 // Debug code
   cout << "Mouse pressed at "
        << m_mousePrsX << ' ' << m_mousePrsY << endl;
   cout << "Mouse released at "
@@ -462,9 +469,7 @@ void aspView::mouseReleaseEvent ( QMouseEvent * E ){
     
   }else if (abs(m_mouseRelX - m_mousePrsX) <= tol &&
             abs(m_mouseRelY - m_mousePrsY) <= tol){
-
-  
-    return;
+    return; // Do nothing when the selection is too small.
   }
   
   return;
@@ -495,7 +500,7 @@ void aspView::wheelEvent(QWheelEvent *E){
       zoomOut();
     }
     
-  }else{
+  }else{ // Control not pressed
 
     // Shift wheel goes left and right. Without shift we go up and down.
     if (E->state() == Qt::ShiftModifier){
@@ -510,8 +515,8 @@ void aspView::wheelEvent(QWheelEvent *E){
       }else if (delta < 0){
         shiftDown();
       }
-    }
-  }
+    } // End Shift pressed
+  } // End control not pressed case
   
   E->accept();
 }
@@ -593,6 +598,7 @@ void aspView::paintEvent(QPaintEvent *){
   QStylePainter paint(this);
   paint.drawPixmap(0, 0, m_pixmap);
 
+  // Drawing the rubber band
   QColor fgColor = QColor(m_prefs.fgColor.c_str());
   paint.setPen(fgColor);
   paint.drawRect(m_rubberBand.normalized().adjusted(0, 0, -1, -1));
@@ -613,9 +619,9 @@ void aspView::popUp(std::string msg){
 }
 
 bool aspView::getStringFromGui(std::string title, std::string description,
-                                std::string inputStr,
-                                std::string & outputStr // output
-                                ){
+                               std::string inputStr,
+                               std::string & outputStr // output
+                               ){
 
   outputStr = "";
 
@@ -661,8 +667,8 @@ bool aspView::getRealValuesFromGui(// Inputs
 }
 
 bool aspView::getStringVectorFromGui(std::string title,
-                                      std::string description,
-                                      std::vector<std::string> & values){
+                                     std::string description,
+                                     std::vector<std::string> & values){
 
   values.clear();
   string inputStr, outputStr;
@@ -765,8 +771,8 @@ void aspView::updateRubberBand(QRect & R){
   return;
 }
 
-void aspView::pixelToWorldCoords(int px, int py,
-                                  double & wx, double & wy){
+void aspView::pixelToWorldCoords(int      px, int      py,
+                                 double & wx, double & wy){
 
   // Compensate for the Qt's origin being in the upper-left corner
   // instead of the lower-left corner.
