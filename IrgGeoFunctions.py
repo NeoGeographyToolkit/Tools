@@ -46,13 +46,16 @@ def getGdalInfoTagValue(text, tag):
         return None
 
 # TODO: This can take a long time due to the stats call!
-def getImageGeoInfo(imagePath):
+def getImageGeoInfo(imagePath, getStats=True):
     """Obtains some image geo information from gdalinfo in dictionary format"""
     
     outputDict = {}
     
     # Call command line tool silently
-    cmd = ['gdalinfo', imagePath, '-stats']
+    # TODO: Make stats call optional, it adds a lot of time.
+    cmd = ['gdalinfo', imagePath, '-proj4']
+    if getStats:
+        cmd.append('-stats')
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     textOutput, err = p.communicate()
     
@@ -69,7 +72,7 @@ def getImageGeoInfo(imagePath):
     outputDict['origin']     = originVals
     outputDict['pixel size'] = pixelSizeVals
 
-    # Get these two values!
+    # Get some proj4 values
     outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
     outputDict['central_meridian']    = getGdalInfoTagValue(textOutput, 'central_meridian')
 
@@ -83,33 +86,33 @@ def getImageGeoInfo(imagePath):
         pass # In most cases this line will not be present
 
     
-    # List of dictionaries per band
-    outputDict['band_info'] = []
+    if getStats: # TODO: Which fields are set by this?
+
+        # List of dictionaries per band
+        outputDict['band_info'] = []
     
-    # Populate band information
-    band = 1
-    while (True): # Loop until we run out of bands
-        bandString = 'Band ' + str(band) + ' Block='
-        bandLoc = textOutput.find(bandString)
-        if bandLoc < 0: # Ran out of bands
-            break
+        # Populate band information
+        band = 1
+        while (True): # Loop until we run out of bands
+            bandString = 'Band ' + str(band) + ' Block='
+            bandLoc = textOutput.find(bandString)
+            if bandLoc < 0: # Ran out of bands
+                break
         
-        # Found the band, read pertinent information
-        bandInfo = {}
+            # Found the band, read pertinent information
+            bandInfo = {}
         
-        # Get the type string
-        bandLine = IrgStringFunctions.getLineAfterText(textOutput, bandString)
-        typePos  = bandLine.find('Type=')
-        commaPos = bandLine.find(',')
-        typeName = bandLine[typePos+5:commaPos-1]
-        bandInfo['type'] = typeName
+            # Get the type string
+            bandLine = IrgStringFunctions.getLineAfterText(textOutput, bandString)
+            typePos  = bandLine.find('Type=')
+            commaPos = bandLine.find(',')
+            typeName = bandLine[typePos+5:commaPos-1]
+            bandInfo['type'] = typeName
         
-        outputDict['band_info'] = bandInfo
+            outputDict['band_info'] = bandInfo
         
-        band = band + 1 # Move on to the next band
+            band = band + 1 # Move on to the next band
         
-    
-    
     return outputDict
 
 def getImageStats(imagePath):
@@ -155,7 +158,7 @@ def getGeoTiffBoundingBox(geoTiffPath):
     """Returns (minLon, maxLon, minLat, maxLat) for a geotiff image"""
     
     # Call command line tool silently
-    cmd = ['geoRefTool --printBounds', geoTiffPath]
+    cmd = ['geoRefTool', '--printBounds', geoTiffPath]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     textOutput, err = p.communicate()
 
