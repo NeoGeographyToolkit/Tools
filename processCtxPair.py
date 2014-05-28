@@ -34,7 +34,7 @@ class Usage(Exception):
 #--------------------------------------------------------------------------------
 
 def replaceExtensionAndFolder(inputPath, outputFolder, newExtension):
-    nexExt = os.path.splitext(inputPath)[0] + newExtension
+    newExt = os.path.splitext(inputPath)[0] + newExtension
     return os.path.join(outputFolder, os.path.basename(newExt))
 
 
@@ -46,7 +46,7 @@ def prepareImage(inputPath, workDir, keep):
     calPath = replaceExtensionAndFolder(inputPath, workDir, '.cal.cub')
 
     # Convert to ISIS format
-    cmd = 'mroctx2isis from=' + inputImagePath  + ' to=' + cubPath
+    cmd = 'mroctx2isis from=' + inputPath  + ' to=' + cubPath
     os.system(cmd)
     
     # Init Spice data
@@ -86,12 +86,12 @@ def main():
             
             if len(args) < 3:
                 parser.error('Missing required input!')
-            options.leftImagePath  = args[0]
-            options.rightImagePath = args[1]
-            options.outputPrefix   = args[2]
+            options.leftPath     = args[0]
+            options.rightPath    = args[1]
+            options.outputPrefix = args[2]
             
             if not options.workDir:
-                options.workDir = os.path.dirname(options.outputPath)
+                options.workDir = os.path.dirname(options.outputPrefix)
 
         except optparse.OptionError, msg:
             raise Usage(msg)
