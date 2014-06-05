@@ -23,6 +23,7 @@ import json, urllib2, requests
 
 import argparse
 
+import apiclient
 from apiclient import discovery
 import httplib2
 from oauth2client import client
@@ -52,41 +53,63 @@ class Usage(Exception):
 
 #--------------------------------------------------------------------------------
 
-def authorize():
+def getCredentials(redo=False):
 
     # Parse OAuth command line arguments
     parser = argparse.ArgumentParser(parents=[tools.argparser])
     flags = parser.parse_args()
     
+    print 'Looking for cached credentials'
     # Check if we already have a file with OAuth credentials
     storage = oauth2client_file.Storage('mapsengine.dat')
     credentials = storage.get()
-    if credentials is None or credentials.invalid:
-      # Start local server, redirect user to authentication page, receive OAuth
-      # credentials on the local server, and store credentials in file
-      flow = client.OAuth2WebServerFlow(
-          client_id=CLIENT_ID,
-          client_secret=CLIENT_SECRET,
-          scope='https://www.googleapis.com/auth/mapsengine.readonly',
-          user_agent='Google-MapsEngineApiSample/1.0')
-      credentials = tools.run_flow(flow, storage, flags)
+    if credentials is None or credentials.invalid or redo:
+        print 'Getting credentials'
+        # Start local server, redirect user to authentication page, receive OAuth
+        # credentials on the local server, and store credentials in file
+        flow = client.OAuth2WebServerFlow(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            scope='https://www.googleapis.com/auth/mapsengine',
+            user_agent='Google-MapsEngineApiSample/1.0')
+        credentials = tools.run_flow(flow, storage, flags)
+      
+    return credentials
+
+def authorize(redo=False):
+
+    credentials = getCredentials(redo)    
     
     # Set up discovery with authorized credentials
     http = httplib2.Http()
     http = credentials.authorize(http)
     
-    service = discovery.build('mapsengine', 'v1',
-                              http=http,
-                              developerKey=API_KEY)
+    service = apiclient.discovery.build('mapsengine', 'v1', http=http, developerKey=API_KEY)
 
+    #print dir(service.maps())
 
-    try:
-        print "Success! Now add code here."
+    #try:
+    #    f = service.maps().list()
+    #    print '====> ' + str(f)
+    #except apiclient.errors.HttpError, error:
+    #  if apiclient.error.resp.status == 401:
+    #    print 'Credentials have been revoked, re-obtaining them.'
     
-    except client.AccessTokenRefreshError:
-        print ("The credentials have been revoked or expired, please re-run"
-               "the application to re-authorize")
+    # TODO: Come up with a check that works so we can force new credentials!    
+        #credentials = getCredentials(True)    
+        #http        = httplib2.Http()
+        #http        = credentials.authorize(http)       
+        #service     = apiclient.discovery.build('mapsengine', 'v1', http=http, developerKey=API_KEY)
 
+    jsonCredentials = credentials.to_json()
+    jsonDict = json.loads(jsonCredentials)
+    #for key, value in jsonDict.iteritems():
+    #    print key + ' ---> ' + str(value)
+    
+    bearerToken = jsonDict['access_token']
+    #print bearerToken
+    return bearerToken
+    
 
 ## Read the location of every Feature in draft version of Table.
 #features = service.tables().features()
@@ -99,14 +122,15 @@ def authorize():
 #  # Is there an additional page of features to load?
 #  request = features.list_next(request, resource)
 
-def createRasterAsset():
+def createRasterAsset(bearerToken):
     
     url = 'https://www.googleapis.com/mapsengine/v1/rasters/upload'
     
     # TODO: Fix this up
     data = ( 
     {
-      "projectId": "12345",  # REQUIRED
+      #"projectId": "298099604529",  # REQUIRED, taken from Google API dashboard
+      "projectId": "04070367133797133737",  # REQUIRED, taken from Maps Engine URL
       "name": "TEST",  # REQUIRED
       "description": "TODO",
       "files": [ # REQUIRED
@@ -118,27 +142,34 @@ def createRasterAsset():
       #  "precision": "second"
       #},
       "draftAccessList": "Map Editors", # REQUIRED
-      "attribution": "TODO", # REQUIRED
+      "attribution": "NASA Public Domain" # REQUIRED
       #"tags": ["a", "b"],
-      "maskType": "autoMask"
+      #"maskType": "autoMask"
     } )
     print(data)
-    headers = {'Authorization': 'Bearer TOK:<MY_TOKEN>',
+    tokenString = 'Bearer '+bearerToken
+    headers = {'Authorization': tokenString,
                'Content-Type': 'application/json'}
     print(headers)
     
     response = requests.post(url, data=json.dumps(data), headers=headers)
     
-    response.text
+    print response.text
     
     print('Received status code ' + str(response.status_code))
     if response.status_code == 401:
         print('Error: Unauthorized access!')
+    if response.status_code == 403:
+        print('Error: Forbidden operation!')
     if response.status_code != 200:
-        return False
+        return (False, response.status_code)
     
+    jsonDict = json.loads(response.text)
+    #for key, value in jsonDict.iteritems():
+    #    print key + ' ---> ' + str(value)
+       
     # Return the asset ID from the response
-    return response['id']
+    return (True, jsonDict['id'])
     
 
 ## Get the asset creation response
@@ -230,11 +261,17 @@ def main():
     startTime = time.time()
 
     # Get server authorization
-    authorize()
-    #
-    ## Create empty raster asset request
-    #assetId = createRasterAsset()
-    #
+    bearerToken = authorize()
+    
+    # Create empty raster asset request
+    (success, assetId) = createRasterAsset(bearerToken)
+    if not success:
+        print 'Refreshing access token...'
+        bearerToken = authorize(True)
+        (success, assetId) = createRasterAsset(bearerToken)
+    if not success:
+        raise Exception('Could not get access token!')
+    
     #if assetId:
     #    print 'Created asset ID ' + str(assetId)
     #
