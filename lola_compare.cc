@@ -219,23 +219,14 @@ int main( int argc, char *argv[] )
 
 
   // Load the input DEM
-  ImageView<PixelGray<float> > inputDem;
+  DiskImageView<PixelGray<float> > inputDem(demPath);
   cartography::GeoReference georef;
-  if (!read_georeferenced_image(inputDem, georef, demPath))
+  if (!read_georeference(georef, demPath))
   {
-    printf("Failed to read image!\n");
+    printf("Failed to read image georeference!\n");
     return false;
   }
   std::cout << "Image size = " << inputDem.rows() << ", " << inputDem.cols() << std::endl;
-
-  //// Pixel check
-  //Vector2 pixelCoord(0,0);
-  //Vector2 gdcCoord = georef.pixel_to_lonlat(pixelCoord);
-  //std::cout << "0,0 = " << gdcCoord.x() << ", " << gdcCoord.y() << std::endl;
-
-  //pixelCoord = Vector2(inputDem.cols()-1,inputDem.rows()-1);
-  //gdcCoord = georef.pixel_to_lonlat(pixelCoord);
-  //std::cout << inputDem.cols()-1 << "," << inputDem.rows()-1 << " = " << gdcCoord.x() << ", " << gdcCoord.y() << std::endl;
 
   // Loop through all lines in the LOLA data file
   std::ifstream lolaFile;
@@ -435,7 +426,7 @@ int main( int argc, char *argv[] )
 
     
     
-  } // End of wrriting diagnostic image
+  } // End of writing diagnostic image
 
   return 0;
 }
