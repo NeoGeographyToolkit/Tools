@@ -88,49 +88,21 @@ message("--------------------------------------------------------------")
 message("--------------------------------------------------------------")
 message("Searching for QT...")
 # TODO: Make sure this finds the correct install!
-#set (QT_QMAKE_EXECUTABLE  ${BASESYSTEM_INSTALL_DIR}/bin/qmake)
+set (QT_QMAKE_EXECUTABLE  ${BASESYSTEM_INSTALL_DIR}/bin/qmake)
+set (QT_MOC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/moc)
+set (QT_RCC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/rcc)
+set (QT_UIC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/uic)
 #SET(CMAKE_PREFIX_PATH ${BASESYSTEM_INSTALL_DIR} ${CMAKE_PREFIX_PATH}) 
-#set(REQUIRED_QT_LIBS QtCore QtXml QtGui ) #TODO: Figure this out
-#find_package(Qt4 4.8.5 REQUIRED )# ${REQUIRED_QT_LIBS})
+set(REQUIRED_QT_LIBS QtCore QtXml QtGui ) #TODO: Figure this out
+find_package(Qt4 4.8.5 REQUIRED ${REQUIRED_QT_LIBS})
 
-# Testing: Manual QT settings
-set(QT_FOUND True)
 
-set(QT_INCLUDE_DIRS ${BASESYSTEM_INSTALL_DIR}/include/Qt
-            ${BASESYSTEM_INSTALL_DIR}/include/Qt3Support
-            ${BASESYSTEM_INSTALL_DIR}/include/QtCore
-            ${BASESYSTEM_INSTALL_DIR}/include/QtDesigner
-            ${BASESYSTEM_INSTALL_DIR}/include/QtGui
-            ${BASESYSTEM_INSTALL_DIR}/include/QtHelp
-            ${BASESYSTEM_INSTALL_DIR}/include/QtMultimedia
-            ${BASESYSTEM_INSTALL_DIR}/include/QtNetwork
-            ${BASESYSTEM_INSTALL_DIR}/include/QtSql
-            ${BASESYSTEM_INSTALL_DIR}/include/QtSvg
-            ${BASESYSTEM_INSTALL_DIR}/include/QtTest
-            ${BASESYSTEM_INSTALL_DIR}/include/QtUiTools
-            ${BASESYSTEM_INSTALL_DIR}/include/QtXml
-            ${BASESYSTEM_INSTALL_DIR}/include/QtXmlPatterns)
-set(QT_LIBRARY_DIR  ${BASESYSTEM_INSTALL_DIR}/lib)
-set(QT_LIBRARIES  libQt3Support.so
-          libQtCLucene.so
-          libQtCore.so
-          libQtDesignerComponents.so
-          libQtDesigner.so
-          libQtGui.so
-          libQtHelp.so
-          libQtMultimedia.so
-          libQtNetwork.so
-          libQtSql.so
-          libQtSvg.so
-          libQtTest.so
-          libQtXmlPatterns.so
-          libQtXml.so )
-
-if(QT_FOUND)
-    message("QT include dirs  " ${QT_INCLUDE_DIRS})
-    include_directories(${QT_INCLUDE_DIRS})
-    link_directories(${QT_LIBRARY_DIR})
-endif(QT_FOUND)
+if(Qt4_FOUND)
+    include(${QT_USE_FILE})
+    message("QT include dirs  " ${QT_INCLUDES})
+    #include_directories(${QT_INCLUDE_DIRS})
+    #link_directories(${QT_LIBRARY_DIR})
+endif(Qt4_FOUND)
 message("--------------------------------------------------------------")
 
 # Get NAIF includes (Needed for reading/writing SPICE data)
@@ -167,7 +139,7 @@ set(PROTOBUF_FOUND)
 set(PROTOBUF_INCLUDE_DIR ${BASESYSTEM_INSTALL_DIR}/include   )
 set(PROTOBUF_LIBRARY     ${BASESYSTEM_INSTALL_DIR}/lib/libprotobuf.so)
 include_directories("${PROTOBUF_INCLUDE_DIR}")
-include_directories("${QT_INCLUDE_DIRS}")
+#include_directories("${QT_INCLUDE_DIRS}")
 include_directories("${NAIF_INCLUDE_DIRS}")
 
 
@@ -200,6 +172,10 @@ target_link_libraries(geoRefTool  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES
 add_executable(maskFromIntersectError maskFromIntersectError.cc) 
 target_link_libraries(maskFromIntersectError  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES}) 
 
+# TODO: Remove ASP dependencies.
+add_executable(applyMask applyMask.cc) 
+target_link_libraries(applyMask  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES} ${Boost_LIBRARIES}) 
+
 add_executable(stereoIpFind stereoIpFind.cc)
 target_link_libraries(stereoIpFind  ${VISIONWORKBENCH_LIBRARIES}  ${StereoPipeline_LIBRARIES}) 
 
@@ -215,7 +191,7 @@ target_link_libraries(dem_mean_std  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipelin
 add_executable(blur_dem blur_dem.cc) 
 target_link_libraries(blur_dem ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
 
-# ASP Viewer 
+# ASP Viewer ---------------------------------------------
 
 # Source files
 SET( ASPVIEW_MOC_SRCS 
@@ -249,7 +225,7 @@ SET( QT_USE_QTXML TRUE )
 
 # this command finds Qt4 libraries and sets all required variables
 # note that it's Qt4, not QT4 or qt4
-FIND_PACKAGE( Qt4 REQUIRED )
+#FIND_PACKAGE( Qt4 REQUIRED )
 
 # add some useful macros and variables (QT_USE_FILE is a variable
 # defined by FIND_PACKAGE( Qt4 ) that contains a path to CMake script)
