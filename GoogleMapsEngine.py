@@ -19,9 +19,7 @@
 
 import sys, os, glob, optparse, re, shutil, subprocess, string, time
 
-import json, urllib2, requests
-
-import argparse
+import json, urllib2, requests, argparse
 
 import apiclient
 from apiclient import discovery
@@ -31,9 +29,7 @@ from oauth2client import file as oauth2client_file
 from oauth2client import tools
 
 # Authorization codes
-API_KEY       = 'AIzaSyAM1ytSqkzubDMzjVWBjM19uawCkIBVvLY'
-CLIENT_ID     = '298099604529-69gprkqj67qkm5ncfik32uenug8qgagn.apps.googleusercontent.com'
-CLIENT_SECRET = 'kNDmMQi_BH2ttN3XRIY2GA-7'
+
 #TABLE_ID      = 'YOUR_TABLE_ID'
 
 
@@ -122,11 +118,11 @@ def authorize(redo=False):
 #  # Is there an additional page of features to load?
 #  request = features.list_next(request, resource)
 
-def createRasterAsset(bearerToken):
+def createRasterAsset(bearerToken, inputFile): #TODO: Pass in a file list?
     
     url = 'https://www.googleapis.com/mapsengine/v1/rasters/upload'
     
-    # TODO: Fix this up
+    justFilename = os.path.basename(inputFile)
     data = ( 
     {
       #"projectId": "298099604529",  # REQUIRED, taken from Google API dashboard
@@ -134,7 +130,7 @@ def createRasterAsset(bearerToken):
       "name": "TEST",  # REQUIRED
       "description": "TODO",
       "files": [ # REQUIRED
-        { "filename": "means.png" }
+        { "filename": justFilename }
       ],
       #"acquisitionTime": {
       #  "start": "2010-01-01T12:00:00Z",
@@ -172,61 +168,38 @@ def createRasterAsset(bearerToken):
     return (True, jsonDict['id'])
     
 
-## Get the asset creation response
-#
-#{
-#  "id": "14182859561222861561-14182359541225861161",
-#  "projectId": "14182859561222861561",
-#  "rasterType": "image",
-#  "name": "Water temperature, South Fork Stillaguamish, 2010",
-#  "description": "Temperature gradients from 2010 measurements.",
-#  "files": [
-#    {
-#      "filename": "o37122g4ne_1.tfw",
-#      "uploadStatus": "inProgress"
-#    },
-#    {
-#      "filename": "o37122g4ne_1.tif",
-#      "uploadStatus": "inProgress"
-#    },
-#    {
-#      "filename": "o37122g4ne_1.tif.xml",
-#      "uploadStatus": "inProgress"
-#    },
-#    {
-#      "filename": "o37122g4ne_1.txt",
-#      "uploadStatus": "inProgress"
-#    }
-#  ],
-#  "acquisitionTime": {
-#    "start": "2010-01-01T12:00:00.000Z",
-#    "end": "2010-12-01T12:00:00.000Z",
-#    "precision": "second"
-#  },
-#  "tags": [
-#    "snohomish", "stillaguamish", "water_temp"
-#  ],
-#  "maskType": "autoMask",
-#  "processingStatus": "notReady"
-#}
 
+def uploadFile(bearerToken, assetId, filename):
 
-def uploadFile(assetId, filename):
+    # Check input image
+    if not os.path.exists(filename):
+        raise Exception('Input image file ' + filename + ' is missing!')
+    imageSizeBytes = os.path.getsize(filename)
 
-    #TODO: Handle paths
+    # Set up POST request
+    justFilename = os.path.basename(filename)
+    url = 'https://www.googleapis.com/upload/mapsengine/v1/rasters/'+str(assetId)+'/files?filename='+justFilename
+    tokenString = 'Bearer '+bearerToken
+    headers = {'Authorization': tokenString,
+               'Content-Type': 'image/tiff',
+               'Content-Length': str(imageSizeBytes)}
 
-    url = 'https://www.googleapis.com/upload/mapsengine/v1/rasters/'+str(asset_id)+'/files?filename='+filename
-    headers = {'Authorization':  'Bearer TOK:<MY_TOKEN>',
-               'Content-Type':   'image/tiff',
-               'Content-Length': str(imageSizeBytes) }
+    print headers
+    print url
+    print filename
+
     fileList = {'file': open(filename, 'rb')}
 
     response = requests.post(url, headers=headers, files=fileList)
     
+    print response.text
+    
     # Check response status code
-    print('Received status code ' + str(r.status_code))
-    if r.status_code != 204:
+    print('Received status code ' + str(response.status_code))
+    if response.status_code != 204:
+        print 'Failed to upload file!'
         return False
+    print 'File upload started successfully!'
     return True
  
 
@@ -257,6 +230,11 @@ def main():
     #
     #except(optparse.OptionError, msg):
     #    raise Usage(msg)
+    
+    #options.inputPath = 'means.png'
+    options.inputPath = '/home/smcmich1/data/production/NAC_DTM_M151318807_M181974094/results/output-DEM.tif'
+    if not os.path.exists(options.inputPath):
+        raise Exception('Input file does not exist!')
 
     startTime = time.time()
 
@@ -264,19 +242,19 @@ def main():
     bearerToken = authorize()
     
     # Create empty raster asset request
-    (success, assetId) = createRasterAsset(bearerToken)
+    (success, assetId) = createRasterAsset(bearerToken, options.inputPath)
     if not success:
         print 'Refreshing access token...'
         bearerToken = authorize(True)
-        (success, assetId) = createRasterAsset(bearerToken)
+        (success, assetId) = createRasterAsset(bearerToken, options.inputPath)
     if not success:
         raise Exception('Could not get access token!')
     
-    #if assetId:
-    #    print 'Created asset ID ' + str(assetId)
-    #
-    ## Load a file associated with the asset
-    ##uploadFile(assetId, options.inputPath)
+    if success:
+        print 'Created asset ID ' + str(assetId)
+    
+        # Load a file associated with the asset
+        uploadFile(bearerToken, assetId, options.inputPath)
 
 
 
