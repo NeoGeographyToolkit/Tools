@@ -155,13 +155,16 @@ link_directories(${Boost_LIBRARY_DIRS})
 #===================================================================================
 # Executables
 
+# TODO: Move this
+add_executable(readUmdFloodBinary readUmdFloodBinary.cc) 
+target_link_libraries(readUmdFloodBinary  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
+
 
 add_executable(imagestats imagestats.cc) 
 target_link_libraries(imagestats  ${VISIONWORKBENCH_LIBRARIES}) 
 
 add_executable(lola_compare lola_compare.cc) 
 target_link_libraries(lola_compare  ${VISIONWORKBENCH_LIBRARIES}) 
-
 
 add_executable(matchBinaryToCsv matchBinaryToCsv.cc) 
 target_link_libraries(matchBinaryToCsv  ${VISIONWORKBENCH_LIBRARIES}) 
@@ -190,6 +193,9 @@ target_link_libraries(dem_mean_std  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipelin
 
 add_executable(blur_dem blur_dem.cc) 
 target_link_libraries(blur_dem ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
+
+add_executable(demBlend demBlend.cc) 
+target_link_libraries(demBlend  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
 
 # ASP Viewer ---------------------------------------------
 
