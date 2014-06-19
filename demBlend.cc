@@ -141,6 +141,44 @@ void create_out_dir(std::string out_prefix){
 
 // ------
 
+// TODO: This is needed because the existing subsample view does not
+//        divide odd sizes as would be expected.
+// TODO: Why doesn't this work?
+// Simple 2x downsample class
+template <class ImageT>
+class Downsample2xView : public ImageViewBase<Downsample2xView<ImageT> > {
+  ImageT m_child;
+public:
+  typedef typename ImageT::pixel_type pixel_type;
+  typedef typename boost::remove_reference<typename ImageT::result_type>::type result_type;
+  typedef ProceduralPixelAccessor<Downsample2xView<ImageT> > pixel_accessor;
+
+  Downsample2xView( ImageT const& image ) : m_child(image) {}
+
+  inline int32 cols  () const { return m_child.cols()/2; }
+  inline int32 rows  () const { return m_child.rows()/2; }
+  inline int32 planes() const { return m_child.planes(); }
+  inline pixel_accessor origin() const { return pixel_accessor( *this ); }
+
+  inline result_type operator()( int32 i, int32 j, int32 p=0 ) const {
+    return m_child(i*2,j*2,p);
+  }
+
+  typedef Downsample2xView<typename ImageT::prerasterize_type> prerasterize_type;
+  inline prerasterize_type prerasterize( BBox2i const& bbox ) const {
+    return prerasterize_type(m_child.prerasterize(bbox)); }
+  template <class DestT>
+  inline void rasterize( DestT const& dest, BBox2i const& bbox ) const {
+    vw::rasterize( prerasterize(bbox), dest, bbox );
+  }
+};
+
+template <class ViewT>
+Downsample2xView<ViewT>
+downsample2x( ImageViewBase<ViewT> const& view ) {
+  return Downsample2xView<ViewT>( view.impl() );
+}
+
 // Simple 2x upsample class
 template <class ImageT>
 class Upsample2xView : public ImageViewBase<Upsample2xView<ImageT> > {
@@ -161,7 +199,6 @@ public:
     if ((i % 2 != 0) || (j % 2 != 0)) // Return zero except on even indices
       return result_type();
     // Otherwise compute image location
-    //int32 ci = i >> 1; int32 cj = j >> 1;
     return m_child(i/2,j/2,p);
   }
 
@@ -187,8 +224,6 @@ bool buildLaplacianImagePyramid(const ImageViewBase<T> &inputImage,
                                 const int numLevels,
                                 std::vector<ImageView<typename T::pixel_type> > &pyramid)
 {
-  const int SUBSAMPLE_AMOUNT = 2;
-  
   // Set up the gaussian smoothing kernel
   // - Copied from stereo PyramidCorrelationView, experiment with this.
   // - This is a 5x5 seperable kernel.
@@ -196,9 +231,6 @@ bool buildLaplacianImagePyramid(const ImageViewBase<T> &inputImage,
   kernel[0] = kernel[4] = 1.0/16.0;
   kernel[1] = kernel[3] = 4.0/16.0;
   kernel[2] = 6.0/16.0;
-  //kernel[0] = kernel[4] = 0.10;
-  //kernel[1] = kernel[3] = 0.25;
-  //kernel[2] = 0.3;
 
   // Initialize output pyramid levels
   pyramid.resize(numLevels);
@@ -209,22 +241,52 @@ bool buildLaplacianImagePyramid(const ImageViewBase<T> &inputImage,
   
   // First create a full Gaussian pyramid
   // Loop through pyramid levels
+  printf("Building Gaussian pyramid\n");
   blurredImages[0] = inputImage;
+  
+  std::stringstream path;
+  path << "/home/smcmich1/data/demBlendTest/pyrBlur" << 0 << ".tiff";
+  write_image(path.str(), blurredImages[0]);  
+  
+  //std::cout << "blurred: " << blurredImages[0].cols() << " " << blurredImages[0].rows() << std::endl;
   for (int i=1; i<numLevels; ++i)
   {
+    //printf("%d\n", i);
     // Each level is a blurred and downsampled version of the level above it (REDUCE operation)
-    blurredImages[i] = subsample(separable_convolution_filter(blurredImages[i-1], kernel,kernel), SUBSAMPLE_AMOUNT);
+    //blurredImages[i] = downsample2x(separable_convolution_filter(blurredImages[i-1], kernel,kernel));
+    blurredImages[i] = subsample(separable_convolution_filter(blurredImages[i-1], kernel,kernel), 2);
+    //std::cout << "blurred: " << blurredImages[i].cols() << " " << blurredImages[i].rows() << std::endl;
+    
+    std::stringstream path;
+    path << "/home/smcmich1/data/demBlendTest/pyrBlur" << i << ".tiff";
+    write_image(path.str(), blurredImages[i]);
   }
   
   // Now set up the Laplacian representation
+  printf("Building Laplacian pyramid\n");
   for (int i=0; i<numLevels-1; ++i)
   {
+    //printf("%d\n", i);
     // Each level is diff between current gaussian level and EXPAND operation of level below it.
+    //std::cout << "upsample: " << upsample2x(blurredImages[i+1]).cols() << " " << upsample2x(blurredImages[i+1]).rows() << std::endl;
+    //std::cout << "upsample: " << separable_convolution_filter(upsample2x(blurredImages[i+1]), kernel,kernel).cols() << " " << separable_convolution_filter(upsample2x(blurredImages[i+1]), kernel,kernel).rows() << std::endl;
+    
     pyramid[i] = blurredImages[i] - 4.0*separable_convolution_filter(upsample2x(blurredImages[i+1]), kernel,kernel);
+    
+    std::stringstream path;
+    path << "/home/smcmich1/data/demBlendTest/pyrStart" << i << ".tiff";
+    write_image(path.str(), pyramid[i]);
+    
   }
   pyramid[numLevels-1] = blurredImages[numLevels-1];
+  
+  std::stringstream path2;
+  path2 << "/home/smcmich1/data/demBlendTest/pyrStart" << numLevels-1 << ".tiff";
+  write_image(path2.str(), pyramid[numLevels-1]);
 
   // The bottom pyramid level contains the last subsampled image.
+
+  printf("Finished building Laplacian pyramid\n");
 
   return true;     
 }
@@ -235,9 +297,6 @@ template <typename T>
 bool collapseLaplacianImagePyramid(const std::vector<ImageView<T> > &pyramid,
                                       ImageView<T> &outputImage)
 {
-
-  const int SUBSAMPLE_AMOUNT = 2;
-
   // Set up the gaussian smoothing kernel
   // - Copied from stereo PyramidCorrelationView, experiment with this.
   // - This is a 5x5 seperable kernel.
@@ -245,28 +304,35 @@ bool collapseLaplacianImagePyramid(const std::vector<ImageView<T> > &pyramid,
   kernel[0] = kernel[4] = 1.0/16.0;
   kernel[1] = kernel[3] = 4.0/16.0;
   kernel[2] = 6.0/16.0;
-  //kernel[0] = kernel[4] = 0.10;
-  //kernel[1] = kernel[3] = 0.25;
-  //kernel[2] = 0.3;
+
 
   // Initialize temporary storage for blurred images
   // TODO: Any way to avoid allocating these buffers?
   int numLevels = (int)pyramid.size();
   std::vector<ImageView<T> > blurredImages(numLevels);
 
+  printf("Starting pyramid collapse\n");
   blurredImages[numLevels-1] = pyramid[numLevels-1]; //TODO: Avoid copies
+
+  std::stringstream path;
+  path << "/home/smcmich1/data/demBlendTest/pyrEnd" << numLevels-1 << ".tiff";
+  write_image(path.str(), pyramid[numLevels-1]);
 
   for (int i=numLevels-2; i>=0; --i) 
   {
-    printf("Reconstructing upwards\n");
+    //printf("%d\n", i);
+    //printf("Reconstructing upwards\n");
     blurredImages[i] = pyramid[i] + 4.0*separable_convolution_filter(upsample2x(blurredImages[i+1]), kernel,kernel);
     std::stringstream path;
-    path << "/home/smcmich1/data/pyramid/levelB" << i << ".tiff";
-    write_image(path.str(), blurredImages[i]);
+    path << "/home/smcmich1/data/demBlendTest/pyrEnd" << i << ".tiff";
+    write_image(path.str(), pyramid[i]);
     
   }
   outputImage = copy(blurredImages[0]); // TODO: Avoid copies
+  printf("Finished collapsing pyramid\n");
   
+  //exit(1);
+    
   return true;     
 }
 
@@ -327,20 +393,20 @@ class DemMosaicView: public ImageViewBase<DemMosaicView>{
   int    m_cols, m_rows;
   bool   m_use_no_weights;
   bool   m_stack_dems;
-  double m_out_nodata_value;
+  float m_out_nodata_value;
   //vector<ModelParams              > const& m_modelParamsArray;
   vector<DiskImageView<DemPixelAlphaT> > const& m_images;
   vector<cartography::GeoReference> const& m_georefs; 
-  vector<double>                    const& m_nodata_values;
+  vector<float>                    const& m_nodata_values;
   cartography::GeoReference m_out_georef;
 
 
 public:
-  DemMosaicView(int cols, int rows, bool use_no_weights, bool stack_dems, double out_nodata_value,
+  DemMosaicView(int cols, int rows, bool use_no_weights, bool stack_dems, float out_nodata_value,
                 //vector<ModelParams              > const& modelParamsArray,
                 vector<DiskImageView<DemPixelAlphaT> > const& images,
                 vector<cartography::GeoReference> const& georefs,
-                vector<double                   > const& nodata_values,
+                vector<float                   > const& nodata_values,
                 cartography::GeoReference         const& out_georef
                 ):
     m_cols(cols), m_rows(rows),
@@ -373,10 +439,8 @@ public:
   typedef CropView<ImageView<pixel_type> > prerasterize_type;
   inline prerasterize_type prerasterize(BBox2i const& bbox) const {   
     
-    //TODO: There ought to be a better way of doing this!
-    // Compute output georef resolution in degrees lat/lon
-    const Vector2 output_georef_resolution = getGeorefResolution(m_out_georef);
-    vw_out() << "Using output resolution: " << output_georef_resolution << "\n";
+    vw_out() << "------Rasterizing tile of size: " << bbox << "\n";
+    // The tile size is always a power of two
     
     
     // Determine the number of pyramid layers
@@ -386,8 +450,9 @@ public:
     //   DEMs which are not the same resolution.
     const int numPyramidLayers = 3; //TODO: Make a user input!
     
-
+    printf("Setting up accumulators...\n");
     // Set up pyramid accumulators, one for value and one for weight.
+    // - Thi size of each pyramid layer will be a power of two.
     size_t layer_width  = bbox.width();
     size_t layer_height = bbox.height();
     std::vector<ImageView<pixel_type> > tile_pyramid  (numPyramidLayers);
@@ -401,29 +466,23 @@ public:
       layer_height /= 2;
     }
     
+    ImageView<pixel_type> output_tile; // The output tile!
 
     // Loop through all input DEMs
     const int numDems = (int)m_images.size();
     for (int dem_iter = 0; dem_iter < numDems; dem_iter++){
+      vw_out() << "Starting DEM " << dem_iter << std::endl;
+
 
       // Select the georeference and image data for the current DEM
       cartography::GeoReference    georef        = m_georefs[dem_iter];
       ImageViewRef<DemPixelAlphaT> curr_disk_dem = m_images [dem_iter];
       double                       nodata_value  = m_nodata_values[dem_iter];
 
-      //TODO: Probably a better way to do this.
-      // Compute the difference in resolution between this DEM and the output DEM
-      Vector2 dem_georef_resolution = getGeorefResolution(georef);
-      vw_out() << "Found DEM resolution: " << dem_georef_resolution << "\n";
-      double res_ratio_x     = dem_georef_resolution[0] / output_georef_resolution[0];
-      double res_ratio_y     = dem_georef_resolution[1] / output_georef_resolution[1];
-      double resample_factor = 0.5*(res_ratio_x*res_ratio_y);
-      vw_out() << "Using resample factor: " << resample_factor << "\n";
-      
       
       // Get the tile corner lat/lon locations using the output DEM georeference
-      Vector3 minLonLat = m_out_georef.pixel_to_lonlat(bbox.min());
-      Vector3 maxLonLat = m_out_georef.pixel_to_lonlat(bbox.max());
+      Vector2 minLonLat = m_out_georef.pixel_to_lonlat(bbox.min());
+      Vector2 maxLonLat = m_out_georef.pixel_to_lonlat(bbox.max());
       
       // Determine the pixels in the current DEM that those tile corners correspond to.
       Vector2 minPixel = georef.lonlat_to_pixel(minLonLat);
@@ -432,24 +491,69 @@ public:
       // Make sure that the max and min pixel coordinates are not swapped
       if (minPixel[0] > maxPixel[0]) std::swap(minPixel[0], maxPixel[0]);
       if (minPixel[1] > maxPixel[1]) std::swap(minPixel[1], maxPixel[1]);
-      minPixel = floor(minPixel); // Round outwards
-      maxPixel = ceil (maxPixel);
+      //minPixel = floor(minPixel); // Round outwards
+      //maxPixel = ceil (maxPixel);
       
+      //TODO: Fix off-by-a-pixel bug!
+           
       // Set up the bounding box in the current DEM corresponding the the current output tile
-      BBox2i curr_box(minPixel[0], minPixel[1], maxPixel[0] - minPixel[0], maxPixel[1] - minPixel[1]);
-      curr_box.expand(BilinearInterpolation::pixel_buffer + 1); // Leave an interpolation buffer
-      curr_box.crop(bounding_box(curr_disk_dem));               // Restrict to the DEM size in pixels.
-      if (curr_box.empty()) 
-        continue; // If no pixels for this DEM fall in this tile, move to the next tile.
-            
+      //BBox2i curr_box(minPixel[0], minPixel[1], maxPixel[0] - minPixel[0], maxPixel[1] - minPixel[1]);
+      BBox2f curr_box(minPixel[0], minPixel[1], maxPixel[0] - minPixel[0], maxPixel[1] - minPixel[1]);
+
+      //curr_box.expand(BilinearInterpolation::pixel_buffer + 1); // Leave an interpolation buffer     
+      BBox2f overlapDem = curr_box;
+      overlapDem.crop(bounding_box(curr_disk_dem));
+      //curr_box.crop(bounding_box(curr_disk_dem));               // Restrict to the DEM size in pixels.
+      if (overlapDem.empty()) {
+        vw_out() << "Skipping DEM, no overlap with tile " << std::endl;
+        continue; // If no pixels for this DEM fall in this tile, move to the next tile.      
+      }
+      vw_out() << "Using BBox " << curr_box << std::endl;
+      
+      printf("Loading DEM...\n");
       //TODO: Replace with ASP AA resampling!
+      // Load the portion of the DEM from disk in the tile's bounding box
+      // - Expand the DEM if necessary using an invalid (alpha = 0.0) pixel.
+      // - Resize the loaded DEM to the size of the output tile.
+      //   - This effectively resamples the DEM to the output resolution
+      ImageView<DemPixelAlphaT> curr_dem = resize(
+                                                  crop(
+                                                       edge_extend(curr_disk_dem, 
+                                                                   ValueEdgeExtension<DemPixelAlphaT>(DemPixelAlphaT(0,0))
+                                                                  ),
+                                                       curr_box
+                                                      ), 
+                                                  bbox.width(), bbox.height()
+                                                 ); 
+      double dem_width_scale  = bbox.width()  / curr_box.width();
+      double dem_height_scale = bbox.height() / curr_box.height();
+      printf("dem_width_scale  = %lf\n", dem_width_scale);
+      printf("dem_height_scale = %lf\n", dem_height_scale);
+/*                                                 
+      std::stringstream path;
+      path << "/home/smcmich1/data/demBlendTest/resize_dem" << dem_iter << ".tiff";
+      write_image(path.str(), curr_dem);  
+                                                
+      // DEBUG
+      ImageView<DemPixelAlphaT> ext_dem = crop(
+                                               edge_extend(curr_disk_dem, 
+                                                           ValueEdgeExtension<DemPixelAlphaT>(DemPixelAlphaT(0,0))
+                                                          ),
+                                               curr_box
+                                              );
+      std::stringstream path2;
+      path2 << "/home/smcmich1/data/demBlendTest/ext_dem" << dem_iter << ".tiff";
+      write_image(path2.str(), ext_dem);  
+                                                 
+      //output_tile = select_channel(curr_dem,0);  //DEBUG: Just copy the input DEM to the output tile!
+*/      
+            
       // Load the entire bounding box from the DEM on disk into memory.
       // - At the same time, resample it to the same ground resolution as the output image.
       //ImageView<DemPixelAlphaT> curr_dem = crop(curr_disk_dem, curr_box);
       //ImageView<DemPixelAlphaT> curr_dem = resample_aa(crop(curr_disk_dem, curr_box), resample_factor);
-      ImageView<DemPixelAlphaT> curr_dem = resample(crop(curr_disk_dem, curr_box), resample_factor);
-      
-      
+
+            
       // Set up an interpolation wrapper around the loaded DEM image.
       ImageViewRef<DemPixelAlphaT> interp_dem
         = interpolate(curr_dem, BilinearInterpolation(), ConstantEdgeExtension());
@@ -461,6 +565,7 @@ public:
         = interpolate(curr_dem_masked, BilinearInterpolation(), ConstantEdgeExtension());        
       
       
+      printf("Building pyramid...\n");
       // Generate laplacian pyramid for the current DEM 
       // - This replaces the alpha channel with a pixel mask.
       // - TODO: May need to add some special handling of invalid pixels so that they do not
@@ -474,16 +579,21 @@ public:
       // Loop through all pyramid levels
       // - Layer zero is the highest resolution, down to the lowest at numPyramidLayers-1.
       for (int layer=0; layer<numPyramidLayers; ++layer) {
+      
+        vw_out() << "Starting layer " << layer << std::endl;
         
         int    layer_width   = tile_pyramid[layer].cols();
         int    layer_height  = tile_pyramid[layer].rows();
-        double res_reduction = 2*layer;
+        double res_reduction = pow(2,layer);
         
         // Generate alpha scaling
         // - Input alpha map (not a pyramid) has the largest alpha spread, used for the lowest res level.
         // - Each res level above that should use half the blending distance.
         //   This is achieved by multiplying the alpha by a factor of two.
-        double alpha_scale  = 2*(numPyramidLayers -1 -layer);
+        double alpha_scale  = pow(2, numPyramidLayers -1 -layer);
+
+        printf("res_reduction = %lf\n", res_reduction);
+        printf("alpha_scale   = %lf\n", alpha_scale);
 
         // Loop through all pixels in the output pyramid layer
         for (int c = 0; c < layer_width; c++){ 
@@ -492,59 +602,39 @@ public:
             // Convert to the full-res pixel coordinate on the current tile
             double ct = c * res_reduction;
             double rt = r * res_reduction;
-                      
-            // Convert from tile pixel coords to absolute pixel coords
-            Vector2 out_pix(ct +  bbox.min().x(), rt +  bbox.min().y());
-            
-            // Get the lon-lat location of this pixel
-            Vector3 thisLonLat = m_out_georef.pixel_to_lonlat(out_pix);
-            
-            // Get the corresponding pixel in the input DEM
-            Vector2 in_pix = georef.lonlat_to_pixel(thisLonLat);
-            
-            // Convert from absolute pixel coords to loaded DEM coords
-            double x_loaded_dem = in_pix[0] - curr_box.min().x();
-            double y_loaded_dem = in_pix[1] - curr_box.min().y();
-            
-            // Convert to the pixel coordinate on the current tile level
-            double x_dem_layer = x_loaded_dem / res_reduction;
-            double y_dem_layer = y_loaded_dem / res_reduction;
-                        
 
-            // Logic note: x/y are doubles.
-            if ((x_loaded_dem < 0) || (x_loaded_dem > interp_dem.cols()-1) ||
-                (y_loaded_dem < 0) || (y_loaded_dem > interp_dem.rows()-1) )
-              continue; // Skip this pixel if it is not contained in the loaded DEM
-              
-            // If we have weights of 0, that means there are invalid pixels,
-            //   so skip this point.
-            int i = (int)floor(x_loaded_dem); // Round to a whole pixel because we don't
-            int j = (int)floor(y_loaded_dem); //  want to interpolate the alpha channel here.
-            if (curr_dem(i,   j  ).a() <= 0 ||
-                curr_dem(i+1, j  ).a() <= 0 ||
-                curr_dem(i,   j+1).a() <= 0 ||
-                curr_dem(i+1, j+1).a() <= 0
-                ) continue;
             
             // Now interpolate the input DEM value and the alpha value.
-            double val = demPyramid[layer](x_dem_layer, y_dem_layer); // Value from the pyramid level
-            double wt  = interp_dem(x_loaded_dem, y_loaded_dem).a();  // The alpha is always computed at full res
+            //double val = demPyramid[layer](x_dem_layer, y_dem_layer); // Value from the pyramid level
+            //double wt  = interp_dem(x_resize_dem, y_resize_dem).a();  // The alpha is always computed at full res
+            double val = demPyramid[layer](c, r); // Value from the pyramid level
+            double wt  = interp_dem(ct, rt).a();  // The alpha is always computed at full res
             
             // Apply the alpha scaling factor to the weight
             wt *= alpha_scale;
+          
 
             if (wt <= 0.0) // Double check that the alpha value is valid.
               continue;
-            if (wt > 1.0) // The weigh saturates at 1.0
+            if (wt > 1.0) // The weight saturates at 1.0
               wt = 1.0;
             
             //TODO: Retain these options?
             //if (m_use_no_weights || m_stack_dems) 
             //  wt = 1.0; // If either is true the weight must be 0 or 1.
               
+            //printf("c, r = %d, %d\n", c, r);
+              
             float current_val = tile_pyramid[layer](c, r);
-            if ( current_val == m_out_nodata_value || isnan(current_val) )
-              tile_pyramid[layer](c, r) = 0; // Handle if we got an invalid output value
+            if ( current_val == m_out_nodata_value || isnan(current_val) ) {
+              tile_pyramid[layer](c, r) = 0; // Clear nodata values
+              //printf("Resetting tile value\n");
+            }
+            
+            //if (r==20 && c==20) {
+            //  printf("Current val = %f\n", tile_pyramid[layer](c, r));
+            //  printf("Input   val = %f\n", val);
+           // }
               
               
             if (dem_iter == (numDems-1)) { // If on the last (priority) DEM
@@ -557,11 +647,17 @@ public:
                 tile_pyramid  [layer](c, r) = inv_wt*norm_val + wt*val;
                 weight_pyramid[layer](c, r) = 1.0; // Sum of weights is now 1.0
               }
-            }else{ // Normal operation
+            }else{ // Normal operation*/
               // Combine the values
               tile_pyramid  [layer](c, r) += wt*val;
               weight_pyramid[layer](c, r) += wt;
             }
+            
+            //if (r==20 && c==20) {
+            //  printf("Output  val = %f\n",    tile_pyramid  [layer](c, r));
+            //  printf("Output  weight = %f\n", weight_pyramid[layer](c, r));
+           // }
+            
 
             
             //if (!m_stack_dems){ // Combine the values
@@ -581,6 +677,8 @@ public:
     } // end iterating over DEMs
 
 
+    printf("Normalizing values according to weights...\n");
+
     // Loop through all pyramid levels
     // - Layer zero is the highest resolution, down to the lowest at numPyramidLayers-1.
     for (int layer=0; layer<numPyramidLayers; ++layer) {
@@ -591,17 +689,17 @@ public:
         for (int r = 0; r < tile_pyramid[layer].rows(); r++){
           float thisWeight = weight_pyramid[layer](c, r);
           if ( thisWeight > 0 ){
-            tile_pyramid[layer](c,r) /= thisWeight;
+            tile_pyramid[layer](c,r) = tile_pyramid[layer](c,r) / thisWeight;
             num_valid_pixels++;
           }
+          
         } // End row loop
       } // End col loop
     } // End layer loop
 
 
-
+    printf("Collapsing pyramid\n");
     // Collapse the pyramid
-    ImageView<pixel_type> output_tile;
     collapseLaplacianImagePyramid(tile_pyramid, output_tile);
 
 //     vw_out() << "Num valid pixels in " << bbox  << ' ' << num_valid_pixels
@@ -626,7 +724,7 @@ int main( int argc, char *argv[] ) {
     bool use_no_weights = false, stack_dems = false;
     string dem_list_file, out_dem_dir;
     double mpp = 0.0, tr = 0.0;
-    double out_nodata_value = numeric_limits<double>::quiet_NaN();
+    float out_nodata_value = numeric_limits<float>::quiet_NaN();
     int num_threads = 0, tile_size = -1, tile_index = -1;
     po::options_description general_options("Options");
     general_options.add_options()
@@ -642,7 +740,7 @@ int main( int argc, char *argv[] ) {
        "The index of the tile to save in the list of tiles (starting from zero). If called with given tile size, and no tile index, the tool will print out how many tiles are there.")
       ("output-dem-dir,o", po::value<string>(&out_dem_dir),
        "The directory in which to save the DEM tiles.")
-      ("output-nodata-value", po::value<double>(&out_nodata_value),
+      ("output-nodata-value", po::value<float>(&out_nodata_value),
        "No-data value to use on output.")
       ("use-no-weights", po::bool_switch(&use_no_weights)->default_value(false),
        "Average the DEMs to mosaic without using weights (the result is not as smooth).")
@@ -744,23 +842,32 @@ int main( int argc, char *argv[] ) {
     
     // Set the lower-left corner
     Vector2 beg_pix = out_georef.lonlat_to_pixel(Vector2(ll_bbox[0], ll_bbox[3]));
-    out_georef = crop(out_georef, beg_pix[0], beg_pix[1]);
+    out_georef = crop(out_georef, beg_pix[0], beg_pix[1]); // Reset georef to start at this pixel
     std::cout << "Output georeference:\n" << out_georef << std::endl;
     
     // Image size
     Vector2 end_pix = out_georef.lonlat_to_pixel(Vector2(ll_bbox[1], ll_bbox[2]));
-    int cols = (int)ceil(end_pix[0]);
+    int cols = (int)ceil(end_pix[0]); // Georef starts at zero and goes to these pixels
     int rows = (int)ceil(end_pix[1]);
+
+    //TODO: Force tile_size to be multiple of internal tile size!
+    //TODO: Pad to multiple of external tile size!
+    int pad_cols = cols % 256;
+    int pad_rows = cols % 256;
+    if (pad_cols > 0)
+      cols += (256-pad_cols);
+    if (pad_rows > 0)
+      rows += (256-pad_rows);
 
     typedef PixelGrayA<float> DemPixelAlphaT; //TODO: Define this somewhere else?
 
     // Compute the weights, and store the no-data values, pointers
     // to images, and georeferences (for speed).
     //vector<ModelParams> modelParamsArray;
-    vector<double> nodata_values;
-    vector< DiskImageView<DemPixelAlphaT> > images;
-    vector< cartography::GeoReference > georefs;
-    for (int dem_iter = 0; dem_iter < (int)dem_files.size(); dem_iter++){
+    vector<float                        > nodata_values;
+    vector<DiskImageView<DemPixelAlphaT> > images;
+    vector<cartography::GeoReference     > georefs;
+    for (int dem_iter = 0; dem_iter < (int)dem_files.size(); dem_iter++){ // Loop through all DEMs
       //modelParamsArray.push_back(ModelParams());
       //modelParamsArray[dem_iter].inputFilename = dem_files[dem_iter];
       images.push_back(DiskImageView<DemPixelAlphaT>( dem_files[dem_iter] ));
@@ -774,7 +881,7 @@ int main( int argc, char *argv[] ) {
       }
       georefs.push_back(geo);
       
-      double curr_nodata_value = out_nodata_value;
+      float curr_nodata_value = out_nodata_value;
       DiskImageResourceGDAL in_rsrc(dem_files[dem_iter]);
       if ( in_rsrc.has_nodata_read() ) curr_nodata_value = in_rsrc.nodata_read();
       nodata_values.push_back(curr_nodata_value);
@@ -789,6 +896,7 @@ int main( int argc, char *argv[] ) {
       }
 
     }
+
 
     // Form the mosaic and write it to disk
     vw_out()<< "The size of the mosaic is " << cols << " x " << rows
