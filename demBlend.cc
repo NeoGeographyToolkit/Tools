@@ -466,7 +466,7 @@ public:
       layer_height /= 2;
     }
     
-    ImageView<pixel_type> output_tile; // The output tile!
+    ImageView<pixel_type> output_tile(bbox.width(), bbox.height()); // The output tile!
 
     // Loop through all input DEMs
     const int numDems = (int)m_images.size();
@@ -481,8 +481,10 @@ public:
 
       
       // Get the tile corner lat/lon locations using the output DEM georeference
-      Vector2 minLonLat = m_out_georef.pixel_to_lonlat(bbox.min());
-      Vector2 maxLonLat = m_out_georef.pixel_to_lonlat(bbox.max());
+      BBox2i bbox_bigger = bbox;
+      bbox_bigger.expand(bbox.width()/10); //TODO: 
+      Vector2 minLonLat = m_out_georef.pixel_to_lonlat(bbox_bigger.min());
+      Vector2 maxLonLat = m_out_georef.pixel_to_lonlat(bbox_bigger.max());
       
       // Determine the pixels in the current DEM that those tile corners correspond to.
       Vector2 minPixel = georef.lonlat_to_pixel(minLonLat);
@@ -491,44 +493,82 @@ public:
       // Make sure that the max and min pixel coordinates are not swapped
       if (minPixel[0] > maxPixel[0]) std::swap(minPixel[0], maxPixel[0]);
       if (minPixel[1] > maxPixel[1]) std::swap(minPixel[1], maxPixel[1]);
-      //minPixel = floor(minPixel); // Round outwards
-      //maxPixel = ceil (maxPixel);
-      
-      //TODO: Fix off-by-a-pixel bug!
+      minPixel = floor(minPixel); // Round outwards
+      maxPixel = ceil (maxPixel);
            
       // Set up the bounding box in the current DEM corresponding the the current output tile
-      //BBox2i curr_box(minPixel[0], minPixel[1], maxPixel[0] - minPixel[0], maxPixel[1] - minPixel[1]);
-      BBox2f curr_box(minPixel[0], minPixel[1], maxPixel[0] - minPixel[0], maxPixel[1] - minPixel[1]);
+      BBox2i curr_box(minPixel[0], minPixel[1], maxPixel[0] - minPixel[0], maxPixel[1] - minPixel[1]);
 
-      //curr_box.expand(BilinearInterpolation::pixel_buffer + 1); // Leave an interpolation buffer     
-      BBox2f overlapDem = curr_box;
-      overlapDem.crop(bounding_box(curr_disk_dem));
-      //curr_box.crop(bounding_box(curr_disk_dem));               // Restrict to the DEM size in pixels.
-      if (overlapDem.empty()) {
+      //double dem_width_scale  = bbox.width()  / curr_box.width();
+      //double dem_height_scale = bbox.height() / curr_box.height();
+      //printf("dem_width_scale  = %lf\n", dem_width_scale);
+      //printf("dem_height_scale = %lf\n", dem_height_scale);
+      
+      //TODO: Do something to make sure outer DEM boundary is sampled!
+
+      curr_box.expand(BilinearInterpolation::pixel_buffer + 1); // Leave an interpolation buffer     
+      curr_box.crop(bounding_box(curr_disk_dem));               // Restrict to the DEM size in pixels.
+      if (curr_box.empty()) {
         vw_out() << "Skipping DEM, no overlap with tile " << std::endl;
         continue; // If no pixels for this DEM fall in this tile, move to the next tile.      
       }
       vw_out() << "Using BBox " << curr_box << std::endl;
       
       printf("Loading DEM...\n");
-      //TODO: Replace with ASP AA resampling!
-      // Load the portion of the DEM from disk in the tile's bounding box
-      // - Expand the DEM if necessary using an invalid (alpha = 0.0) pixel.
-      // - Resize the loaded DEM to the size of the output tile.
-      //   - This effectively resamples the DEM to the output resolution
-      ImageView<DemPixelAlphaT> curr_dem = resize(
-                                                  crop(
-                                                       edge_extend(curr_disk_dem, 
-                                                                   ValueEdgeExtension<DemPixelAlphaT>(DemPixelAlphaT(0,0))
-                                                                  ),
-                                                       curr_box
-                                                      ), 
-                                                  bbox.width(), bbox.height()
-                                                 ); 
-      double dem_width_scale  = bbox.width()  / curr_box.width();
-      double dem_height_scale = bbox.height() / curr_box.height();
-      printf("dem_width_scale  = %lf\n", dem_width_scale);
-      printf("dem_height_scale = %lf\n", dem_height_scale);
+      
+      // Just load the DEM from disk to interpolate from
+      ImageView<DemPixelAlphaT> raw_disk_dem = crop(curr_disk_dem, curr_box);
+      // Set up an interpolation wrapper around the loaded DEM image.
+      ImageViewRef<DemPixelAlphaT> interp_raw_disk_dem
+        = interpolate(raw_disk_dem, BilinearInterpolation(), ConstantEdgeExtension());
+      
+      printf("Resampling DEM to output tile size...\n");
+      // Initialize the resampled DEM to the desired size
+      ImageView<DemPixelAlphaT> curr_dem(bbox.width(), bbox.height());
+      fill(curr_dem, DemPixelAlphaT(0, 0)); // Initialize to all invalid pixels
+      
+      //TODO: Write a function to do this!
+      //TODO: Should loop be replaced by a functor or something?
+      // Loop through each pixel and interpolate from the raw input DEM.
+      for (int c = 0; c < bbox.width(); c++){ 
+        for (int r = 0; r < bbox.height(); r++){
+                                
+            // Convert from tile pixel coords to output pixel coords
+            Vector2 out_pix(c +  bbox.min().x(), r +  bbox.min().y());
+            
+            // Get the lon-lat location of this pixel
+            Vector2 thisLonLat = m_out_georef.pixel_to_lonlat(out_pix);
+            
+            // Get the corresponding pixel in the input DEM
+            Vector2 in_pix = georef.lonlat_to_pixel(thisLonLat);
+            
+            // Convert from absolute pixel coords to loaded DEM coords
+            double x = in_pix[0] - curr_box.min().x();
+            double y = in_pix[1] - curr_box.min().y();
+            
+            // Logic note: x/y are doubles.
+            if ((x < 0) || (x > interp_raw_disk_dem.cols()-1) ||
+                (y < 0) || (y > interp_raw_disk_dem.rows()-1) ) 
+              continue; // Don't interpolate outside the loaded data, just leave this pixel invalid.
+              
+            // If we have weights of 0, that means there are invalid pixels, so skip this point.
+            int i = (int)floor(x); // Round to a whole pixel because we don't
+            int j = (int)floor(y); //  want to interpolate the alpha channel here.
+            if (interp_raw_disk_dem(i,   j  ).a() <= 0 ||
+                interp_raw_disk_dem(i+1, j  ).a() <= 0 ||
+                interp_raw_disk_dem(i,   j+1).a() <= 0 ||
+                interp_raw_disk_dem(i+1, j+1).a() <= 0 ) 
+              continue;
+            
+            // Now interpolate the input DEM value and the alpha value and assign to resampled DEM.
+            curr_dem(c,r) = interp_raw_disk_dem(x, y);
+        } // End row loop
+      } // End col loop
+      
+      // curr_dem is now initialized with the input DEM resampled to the output resolution!
+      
+      //output_tile = select_channel(curr_dem,0); //DEBUG!!!!
+      
 /*                                                 
       std::stringstream path;
       path << "/home/smcmich1/data/demBlendTest/resize_dem" << dem_iter << ".tiff";
@@ -547,13 +587,7 @@ public:
                                                  
       //output_tile = select_channel(curr_dem,0);  //DEBUG: Just copy the input DEM to the output tile!
 */      
-            
-      // Load the entire bounding box from the DEM on disk into memory.
-      // - At the same time, resample it to the same ground resolution as the output image.
-      //ImageView<DemPixelAlphaT> curr_dem = crop(curr_disk_dem, curr_box);
-      //ImageView<DemPixelAlphaT> curr_dem = resample_aa(crop(curr_disk_dem, curr_box), resample_factor);
-
-            
+                        
       // Set up an interpolation wrapper around the loaded DEM image.
       ImageViewRef<DemPixelAlphaT> interp_dem
         = interpolate(curr_dem, BilinearInterpolation(), ConstantEdgeExtension());
@@ -597,16 +631,13 @@ public:
 
         // Loop through all pixels in the output pyramid layer
         for (int c = 0; c < layer_width; c++){ 
-          for (int r = 0; r < layer_width; r++){
+          for (int r = 0; r < layer_height; r++){
 
             // Convert to the full-res pixel coordinate on the current tile
             double ct = c * res_reduction;
             double rt = r * res_reduction;
-
             
             // Now interpolate the input DEM value and the alpha value.
-            //double val = demPyramid[layer](x_dem_layer, y_dem_layer); // Value from the pyramid level
-            //double wt  = interp_dem(x_resize_dem, y_resize_dem).a();  // The alpha is always computed at full res
             double val = demPyramid[layer](c, r); // Value from the pyramid level
             double wt  = interp_dem(ct, rt).a();  // The alpha is always computed at full res
             
@@ -631,11 +662,6 @@ public:
               //printf("Resetting tile value\n");
             }
             
-            //if (r==20 && c==20) {
-            //  printf("Current val = %f\n", tile_pyramid[layer](c, r));
-            //  printf("Input   val = %f\n", val);
-           // }
-              
               
             if (dem_iter == (numDems-1)) { // If on the last (priority) DEM
               if (wt >= 1.0){ // Ignore previous values
@@ -647,18 +673,11 @@ public:
                 tile_pyramid  [layer](c, r) = inv_wt*norm_val + wt*val;
                 weight_pyramid[layer](c, r) = 1.0; // Sum of weights is now 1.0
               }
-            }else{ // Normal operation*/
+            }else{ // Normal operation
               // Combine the values
               tile_pyramid  [layer](c, r) += wt*val;
               weight_pyramid[layer](c, r) += wt;
             }
-            
-            //if (r==20 && c==20) {
-            //  printf("Output  val = %f\n",    tile_pyramid  [layer](c, r));
-            //  printf("Output  weight = %f\n", weight_pyramid[layer](c, r));
-           // }
-            
-
             
             //if (!m_stack_dems){ // Combine the values
             //  tile(c, r) += wt*val;
@@ -673,7 +692,7 @@ public:
         } // End loop through cols
         
       } // End loop through layers
-      
+
     } // end iterating over DEMs
 
 
