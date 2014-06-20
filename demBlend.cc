@@ -68,6 +68,7 @@ namespace po = boost::program_options;
 
 // Copy-pasted from PhotomotryTK ------
 
+//TODO: Replace with georef BBox function
 Vector4 ComputeGeoBoundary(cartography::GeoReference Geo, int width, int height){
 
   // Get the lonlat coordinates of the four pixels corners of the image.
@@ -104,6 +105,7 @@ Vector4 ComputeGeoBoundary(cartography::GeoReference Geo, int width, int height)
   return corners;
 }
 
+//TODO: replace
 vw::Vector4 getImageCorners(std::string imageFile){
 
   // Get the four corners of an image, that is the lon-lat coordinates of
@@ -624,7 +626,7 @@ public:
         // - Input alpha map (not a pyramid) has the largest alpha spread, used for the lowest res level.
         // - Each res level above that should use half the blending distance.
         //   This is achieved by multiplying the alpha by a factor of two.
-        double alpha_scale  = pow(2, numPyramidLayers -1 -layer);
+        double alpha_scale  = pow(1.4, numPyramidLayers -1 -layer);
 
         printf("res_reduction = %lf\n", res_reduction);
         printf("alpha_scale   = %lf\n", alpha_scale);
@@ -638,8 +640,8 @@ public:
             double rt = r * res_reduction;
             
             // Now interpolate the input DEM value and the alpha value.
-            double val = demPyramid[layer](c, r); // Value from the pyramid level
-            double wt  = interp_dem(ct, rt).a();  // The alpha is always computed at full res
+            float val = demPyramid[layer](c, r); // Value from the pyramid level
+            float wt  = interp_dem(ct, rt).a();  // The alpha is always computed at full res
             
             // Apply the alpha scaling factor to the weight
             wt *= alpha_scale;
@@ -656,9 +658,11 @@ public:
               
             //printf("c, r = %d, %d\n", c, r);
               
-            float current_val = tile_pyramid[layer](c, r);
+            float current_val    = tile_pyramid  [layer](c, r);
+            float current_weight = weight_pyramid[layer](c, r);
             if ( current_val == m_out_nodata_value || isnan(current_val) ) {
               tile_pyramid[layer](c, r) = 0; // Clear nodata values
+              current_val = 0;
               //printf("Resetting tile value\n");
             }
             
@@ -668,10 +672,20 @@ public:
                 tile_pyramid  [layer](c, r) = val;
                 weight_pyramid[layer](c, r) = 1.0;
               } else { // Treat other values as weight (1-wt)
-                double inv_wt = 1.0 - wt;
-                double norm_val = tile_pyramid[layer](c, r) / weight_pyramid[layer](c, r); // Unweighted old sum
+                float inv_wt = 1.0 - wt;
+                float norm_val = current_val / current_weight; // Unweighted old sum
                 tile_pyramid  [layer](c, r) = inv_wt*norm_val + wt*val;
                 weight_pyramid[layer](c, r) = 1.0; // Sum of weights is now 1.0
+                /*
+                printf("c,r = %d, %d\n", c, r);
+                printf("Current val = %f\n", current_val);
+                printf("Current wt  = %f\n", current_weight);
+                printf("Inv weight  = %f\n", inv_wt);
+                printf("Norm val   = %f\n", norm_val);
+                printf("Weight  = %f\n", wt);
+                printf("Dem val = %f\n", val);
+                printf("New val = %f\n", tile_pyramid[layer](c, r));
+                */
               }
             }else{ // Normal operation
               // Combine the values
