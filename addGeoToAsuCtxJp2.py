@@ -42,6 +42,12 @@ def replaceFileExtension(inputPath, ext):
 def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     """Does the actual work of adding the geo data"""
 
+    if not os.path.exists(inputJp2Path):
+        raise Exception('Input file ' + inputJp2Path + ' does not exist!')
+    if not os.path.exists(inputHeaderPath):
+        raise Exception('Input file ' + inputHeaderPath + ' does not exist!')
+
+
     # Get the needed paths
     prjPath = replaceFileExtension(inputJp2Path, '.prj')
     vrtPath = replaceFileExtension(inputJp2Path, '.vrt')
@@ -55,7 +61,7 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
         os.chdir(inputFolder)
 
     # Call perl script, then return to original directory
-    cmd = 'perl isis3world.pl -J -prj ' + inputHeaderPath
+    cmd = 'isis3world.pl -J -prj ' + os.path.basename(inputHeaderPath)
     print cmd
     os.system(cmd)
     if inputFolder != '':
@@ -65,13 +71,16 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     #mv .j2w <INPUT FOLDER>/B01_009838_2108_XI_30N319W.j2w
     #mv .prj <INPUT FOLDER>/B01_009838_2108_XI_30N319W.prj
 
+    if (not os.path.exists(prjPath)):
+        raise Exception('isis3world.pl script failed to create required output files!')
+
     # Next conversion command
     cmd = 'gdal_translate -of VRT -a_srs ESRI::"'+ prjPath +'" -a_nodata 0  '+ inputJp2Path +' '+ vrtPath
     print(cmd)
     os.system(cmd)
 
     # Finish the conversion
-    cmd = 'gdal_translate '+ vrtPath +' '+ outputPath
+    cmd = 'gdal_translate -of JP2OpenJPEG '+ vrtPath +' '+ outputPath
     print(cmd)
     os.system(cmd)
 
@@ -94,6 +103,9 @@ def main():
 
             parser.set_defaults(keep=False)
 
+            parser.add_option("--label", dest="inputHeaderFile", default="",
+                              help="Path to the label file.")
+
             parser.add_option("--manual", action="callback", callback=man,
                               help="Read the manual.")
             parser.add_option("--keep", action="store_true", dest="keep",
@@ -108,7 +120,9 @@ def main():
             else:
                 options.outputPath = replaceFileExtension(options.inputJp2Path, '.tif')
             
-            options.inputHeaderFile = replaceFileExtension(options.inputJp2Path, '.scyl.isis.hdr')
+            # If the path to the header file was not provided, assume the default naming convention
+            if options.inputHeaderFile == "":
+                options.inputHeaderFile = replaceFileExtension(options.inputJp2Path, '.scyl.isis.hdr')
             
         except optparse.OptionError, msg:
             raise Usage(msg)
