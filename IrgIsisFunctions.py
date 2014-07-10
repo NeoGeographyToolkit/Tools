@@ -381,6 +381,7 @@ def getCubeCenterLatitude(cubePath, workDir='tmp'):
     return centerLatitude
     
 
+# TODO: Clean this up!  It only works for the Moon!
 def imgDemToIsisDem(imgPath, outputPath):
     """Converts a DEM in .IMG format (such as LRO WAC DTM) into ISIS compatible format"""
     
@@ -409,6 +410,35 @@ def imgDemToIsisDem(imgPath, outputPath):
     os.remove(temp2)
 
     return True
+
+
+def prepareCtxImage(inputPath, outputFolder, keep):
+    """Prepare a single CTX image for processing"""
+
+    # Set up paths
+    cubPath = IrgFileFunctions.replaceExtensionAndFolder(inputPath, workDir, '.cub')
+    calPath = IrgFileFunctions.replaceExtensionAndFolder(inputPath, workDir, '.cal.cub')
+
+    # Convert to ISIS format
+    if not os.path.exists(cubPath):
+        cmd = 'mroctx2isis from=' + inputPath  + ' to=' + cubPath
+        os.system(cmd)
+    
+    # Init Spice data
+    cmd = 'spiceinit from=' + cubPath
+    os.system(cmd)
+    
+    # Apply image correction
+    if not os.path.exists(calPath):
+        cmd = 'ctxcal from='+cubPath+' to='+calPath
+        os.system(cmd)
+
+    #you can also optionally run ctxevenodd on the cal.cub files, if needed
+
+    if not keep:
+        os.remove(cubPath)
+    
+    return calPath
 
 
 

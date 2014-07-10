@@ -45,6 +45,12 @@ def removeFolderIfExists(directory):
         if e.errno != errno.ENOENT: # Continue if the error is "no such file or directory"
             raise # Re-raise the exception if a different error occured
 
+def replaceExtensionAndFolder(inputPath, outputFolder, newExtension):
+    """Convenience function to replace the extension and the folder of a file path"""
+    newExt = os.path.splitext(inputPath)[0] + newExtension
+    return os.path.join(outputFolder, os.path.basename(newExt))
+
+
 def getFileLineCount(filePath):
     """Counts up the number of lines in a file"""
     f = open(filePath)

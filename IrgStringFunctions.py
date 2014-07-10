@@ -42,6 +42,7 @@ def convertToFloatIfNumber(text):
 
 def getLineAfterText(text, prefix, startPos=0, includeText=False):
     """Extracts the remainder of a line after a prefix"""
+    # StartPos = index in the text to start looking at
     
     # Find the prefix
     prefixLoc = text.find(prefix, startPos)
@@ -89,6 +90,7 @@ def getNumbersInParentheses(text):
 
 def getNumberAfterEqualSign(text, lineStart=0):
     """Extracts a number after an '=' sign on a line"""
+    # LineStart = index in the text to start looking at
     
     numberText = getLineAfterText(text, '=', lineStart, False)
 
