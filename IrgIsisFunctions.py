@@ -21,7 +21,7 @@
 
 import sys, os, re, subprocess, string, time, errno
 
-import IrgStringFunctions
+import IrgStringFunctions, IrgFileFunctions
 
 
 # TODO: This would make more sense in IrgGeoFunctions but some functions here need it!
@@ -416,8 +416,8 @@ def prepareCtxImage(inputPath, outputFolder, keep):
     """Prepare a single CTX image for processing"""
 
     # Set up paths
-    cubPath = IrgFileFunctions.replaceExtensionAndFolder(inputPath, workDir, '.cub')
-    calPath = IrgFileFunctions.replaceExtensionAndFolder(inputPath, workDir, '.cal.cub')
+    cubPath = IrgFileFunctions.replaceExtensionAndFolder(inputPath, outputFolder, '.cub')
+    calPath = IrgFileFunctions.replaceExtensionAndFolder(inputPath, outputFolder, '.cal.cub')
 
     # Convert to ISIS format
     if not os.path.exists(cubPath):
