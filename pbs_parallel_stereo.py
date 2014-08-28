@@ -104,19 +104,19 @@ def main(argsIn):
                                     + '    --    '+ scriptCalls[0] +')')
                                     
     # Correlation stage
-    pbsStrings.append('subjob2=$( ' + corePbsString + '-N pbs_stereo2 -l walltime="'+stepHours[1]+'"'
+    pbsStrings.append('subjob2=$( ' + corePbsString + ' -N pbs_stereo2 -l walltime="'+stepHours[1]+'"'
                                     + ' -e '+ errLogPaths[1] +' -o '+ stdLogPaths[1]
                                     + ' -l select='+str(options.numCorrelationNodes)+':ncpus='+str(cpusPerNode)+':model='+options.nodeType
                                     + ' -W depend=afterok:$subjob1    --    '+ scriptCalls[1] +')')
 
     # Filtering stage
-    pbsStrings.append('subjob3=$( ' + corePbsString + '-N pbs_stereo3 -l walltime="'+stepHours[2]+'"'
+    pbsStrings.append('subjob3=$( ' + corePbsString + ' -N pbs_stereo3 -l walltime="'+stepHours[2]+'"'
                                     + ' -e '+ errLogPaths[2] +' -o '+ stdLogPaths[2]
                                     + ' -l select='+str(1)+':ncpus='+str(cpusPerNode)+':model='+options.nodeType
                                     + ' -W depend=afterok:$subjob2    --    '+ scriptCalls[2] +')')
 
     # Triangulation stage
-    pbsStrings.append(corePbsString + '-N pbs_stereo4 -l walltime="'+stepHours[3]+'"'
+    pbsStrings.append(corePbsString + ' -N pbs_stereo4 -l walltime="'+stepHours[3]+'"'
                                     + ' -e '+ errLogPaths[3] +' -o '+ stdLogPaths[3]
                                     + ' -l select='+str(options.numTriangulationNodes)+':ncpus='+str(cpusPerNode)+':model='+options.nodeType
                                     + ' -W depend=afterok:$subjob3    --    '+ scriptCalls[3])
@@ -133,6 +133,7 @@ def main(argsIn):
     
     # Generate a set of four script files
     for i in range(4):
+        print 'Writing script file ' + scriptCalls[i]
         scriptFile = open(scriptCalls[i], 'w')
         scriptFile.write('#!/bin/bash\n\n')
         thisCommandString = commandString + phases[i]
@@ -143,14 +144,19 @@ def main(argsIn):
         os.system('chmod +x ' + scriptCalls[i])
     
     # Write the PBS script
+    print 'Writing main PBS script ' + pbsPath
     scriptFile = open(pbsPath, 'w')
     scriptFile.write('#!/bin/bash\n\n\n')
+    scriptFile.write('# The parallel_stereo command which is implemented:\n')
     scriptFile.write('# '+ commandString) # Show the implemented command in comments
     for i in range(4):
         scriptFile.write('\n\n\n' + pbsStrings[i])
     scriptFile.close()    
     
-    
+    # Set the PBS file to be executable
+    os.system('chmod +x ' + pbsPath)    
+
+
     ## Clean up temporary files
     #if not options.keep:
     #    IrgFileFunctions.removeFolderIfExists(tempFolder)
@@ -159,6 +165,9 @@ def main(argsIn):
     #endTime = time.time()
     #
     #print "Finished in " + str(endTime - startTime) + " seconds."
+
+    print 'Finished! To run parallel stereo, run the file ' + pbsPath
+
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
