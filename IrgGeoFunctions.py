@@ -175,6 +175,61 @@ def getGeoTiffBoundingBox(geoTiffPath):
     return (minLon, maxLon, minLat, maxLat)
 
 
+def getBoundingBoxFromIsisLabel(filePath):
+    '''Function to read the bounding box from an ISIS label file'''
+
+    if not os.path.exists(filePath):
+        raise Exception('Error, missing label file path!')
+    
+    numFound = 0
+    f = open(filePath, 'r')
+    for line in f:
+        if 'MINIMUM_LATITUDE' in line:
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            endPos = s.find('<')
+            if (endPos >= 0):
+                minLat = float(s[:endPos-1])
+            else:
+                minLat = float(s)
+            numFound = numFound + 1
+            continue
+        if 'MAXIMUM_LATITUDE' in line:
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            endPos = s.find('<')
+            if (endPos >= 0):
+                maxLat = float(s[:endPos-1])
+            else:
+                maxLat = float(s)
+            numFound = numFound + 1
+            continue
+        if ('EASTERNMOST_LONGITUDE' in line) or ('MAXIMUM_LONGITUDE' in line):
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            endPos = s.find('<') # Check for unit name
+            if (endPos >= 0):
+                maxLon = float(s[:endPos-1])
+            else:
+                maxLon = float(s)
+            numFound = numFound + 1
+            continue
+        if ('WESTERNMOST_LONGITUDE' in line) or ('MINIMUM_LONGITUDE' in line):
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            endPos = s.find('<') # Check for unit name
+            if (endPos >= 0):
+                minLon = float(s[:endPos-1])
+            else:
+                minLon = float(s)
+            numFound = numFound + 1
+            continue
+        if numFound == 4:
+            break
+
+    f.close()
+    if numFound < 4:
+        raise Exception('Failed to find lat/lon bounds in file ' + filePath)
+
+    return (minLon, maxLon, minLat, maxLat)
+
+
 def getImageBoundingBox(filePath):
     """Returns (minLon, maxLon, minLat, maxLat) for a georeferenced image file"""
 

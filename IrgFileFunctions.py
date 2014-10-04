@@ -50,6 +50,13 @@ def replaceExtensionAndFolder(inputPath, outputFolder, newExtension):
     newExt = os.path.splitext(inputPath)[0] + newExtension
     return os.path.join(outputFolder, os.path.basename(newExt))
 
+def fileIsNonZero(path):  
+    '''Return true if the file exists and is non-empty'''
+    if os.path.isfile(path) and (os.path.getsize(path) > 0):
+        return True
+    else:
+        return False
+
 
 def getFileLineCount(filePath):
     """Counts up the number of lines in a file"""
