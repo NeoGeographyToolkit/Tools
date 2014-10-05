@@ -153,7 +153,6 @@ def getImageStats(imagePath):
         band = band + 1 # Move to the next band
     
 
-
 def getGeoTiffBoundingBox(geoTiffPath):
     """Returns (minLon, maxLon, minLat, maxLat) for a geotiff image"""
     
@@ -173,6 +172,66 @@ def getGeoTiffBoundingBox(geoTiffPath):
     maxLon = float( IrgStringFunctions.getLineAfterText(textOutput, 'Max longitude =') )
     
     return (minLon, maxLon, minLat, maxLat)
+
+
+def getProjectedBoundsFromIsisLabel(filePath):
+    '''Function to read the projected coordinates bounding box from an ISIS label file'''
+
+    if not os.path.exists(filePath):
+        raise Exception('Error, missing label file path!')
+    
+    # Read all the values!
+    minX    = None
+    maxY    = None
+    pixRes  = None
+    numRows = None
+    numCols = None
+    f = open(filePath, 'r')
+    for line in f:
+        if ('UpperLeftCornerX' in line):
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            endPos = s.find('<')
+            if (endPos >= 0):
+                minX = float(s[:endPos-1])
+            else:
+                minX = float(s)
+            continue
+        if ('UpperLeftCornerY' in line):
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            endPos = s.find('<')
+            if (endPos >= 0):
+                maxY = float(s[:endPos-1])
+            else:
+                maxY = float(s)
+            continue
+        if ('PixelResolution' in line):
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            endPos = s.find('<')
+            if (endPos >= 0):
+                pixRes = float(s[:endPos-1])
+            else:
+                pixRes = float(s)
+            continue
+        if ('      Samples =' in line):
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            numCols = float(s)
+            continue
+        if ('      Lines   =' in line):
+            s = IrgStringFunctions.getLineAfterText(line, '=')
+            numRows = float(s)
+            continue
+        
+    f.close()
+    if (not minX) or (not maxY) or (not pixRes) or (not numRows) or (not numCols):
+        raise Exception('Failed to find projected bounds in file ' + filePath)
+
+    # Compute the other bounds
+    maxX = minX + pixRes*numCols
+    minY = maxY - pixRes*numRows
+
+    return (minX, maxX, minY, maxY)
+
+
 
 
 def getBoundingBoxFromIsisLabel(filePath):

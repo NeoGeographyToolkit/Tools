@@ -19,6 +19,7 @@
 
 import sys, os, glob, optparse, re, shutil, subprocess, string, time
 
+import IrgGeoFunctions
 
 def man(option, opt, value, parser):
     print >>sys.stderr, parser.usage
@@ -66,7 +67,7 @@ def editProjFile(projPath):
             s3     = line.find(']', s2)
             number = line[s2+1:s3]
             line = line.replace('PARAMETER["Standard_Parallel_1",'+number+']',
-                            'PARAMETER["standard_parallel_1",'+number+'],PARAMETER["latitude_of_origin",'+number+']')       
+                            'PARAMETER["standard_parallel_1",'+number+'],PARAMETER["latitude_of_origin",'+number+']')
         outputFile.write(line)
     
     # Clean up
@@ -74,7 +75,7 @@ def editProjFile(projPath):
     outputFile.close()
 
     return outputPath
-    
+   
 
 def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     """Does the actual work of adding the geo data"""
@@ -113,6 +114,12 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     if (not os.path.exists(correctedProjPath)):
         raise Exception('Failed to correct proj file!')
     
+    # Determine the bounds of the image in projected coordinates
+    projectedBounds = IrgGeoFunctions.getProjectedBoundsFromIsisLabel(inputHeaderPath)
+    projectedBoundsString = (str(projectedBounds[0]) + ' ' +
+                             str(projectedBounds[3]) + ' ' +
+                             str(projectedBounds[1]) + ' ' +
+                             str(projectedBounds[2]) )
 
     # Next conversion command
     #cmd = 'gdal_translate -of VRT -a_srs ESRI::"'+ prjPath +'" -a_nodata 0  '+ inputJp2Path +' '+ vrtPath
@@ -122,19 +129,19 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     #print(cmd)
     #os.system(cmd)
     
+    # Copy the input image to the output path
     cmd = 'cp '+ inputJp2Path +'  '+ outputPath
     print(cmd)
     os.system(cmd)
     
+    # Add metadata to the output image, specifying a projecting string and projected coordinate boundaries.
     f = open(correctedProjPath, 'r')
     prjText=f.read()
     f.close()
     print prjText
-    cmd = 'gdal_edit.py -a_srs "'+ prjText +'"  '+ outputPath
+    cmd = 'gdal_edit.py -a_ullr ' + projectedBoundsString + ' --a_srs "'+ prjText +'"  '+ outputPath
     print(cmd)
     os.system(cmd)
-
-
 
     # Clean up temporary files
     if not keep:
