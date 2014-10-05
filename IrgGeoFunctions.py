@@ -184,7 +184,7 @@ def getBoundingBoxFromIsisLabel(filePath):
     numFound = 0
     f = open(filePath, 'r')
     for line in f:
-        if 'MINIMUM_LATITUDE' in line:
+        if ('MINIMUM_LATITUDE' in line) or ('MinimumLatitude' in line):
             s = IrgStringFunctions.getLineAfterText(line, '=')
             endPos = s.find('<')
             if (endPos >= 0):
@@ -193,7 +193,7 @@ def getBoundingBoxFromIsisLabel(filePath):
                 minLat = float(s)
             numFound = numFound + 1
             continue
-        if 'MAXIMUM_LATITUDE' in line:
+        if ('MAXIMUM_LATITUDE' in line) or ('MaximumLatitude' in line):
             s = IrgStringFunctions.getLineAfterText(line, '=')
             endPos = s.find('<')
             if (endPos >= 0):
@@ -202,7 +202,7 @@ def getBoundingBoxFromIsisLabel(filePath):
                 maxLat = float(s)
             numFound = numFound + 1
             continue
-        if ('EASTERNMOST_LONGITUDE' in line) or ('MAXIMUM_LONGITUDE' in line):
+        if ('EASTERNMOST_LONGITUDE' in line) or ('MAXIMUM_LONGITUDE' in line)  or ('MaximumLongitude' in line):
             s = IrgStringFunctions.getLineAfterText(line, '=')
             endPos = s.find('<') # Check for unit name
             if (endPos >= 0):
@@ -211,7 +211,7 @@ def getBoundingBoxFromIsisLabel(filePath):
                 maxLon = float(s)
             numFound = numFound + 1
             continue
-        if ('WESTERNMOST_LONGITUDE' in line) or ('MINIMUM_LONGITUDE' in line):
+        if ('WESTERNMOST_LONGITUDE' in line) or ('MINIMUM_LONGITUDE' in line) or ('MinimumLongitude' in line):
             s = IrgStringFunctions.getLineAfterText(line, '=')
             endPos = s.find('<') # Check for unit name
             if (endPos >= 0):
