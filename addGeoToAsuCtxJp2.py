@@ -54,7 +54,7 @@ def editProjFile(projPath):
     for line in inputFile:
         line = line.replace('D_Mars', 'Mars')
         line = line.replace('PROJECTION["Equidistant_Cylindrical"]',
-                            'PROJECTION["Equirectangular"],')
+                            'PROJECTION["Equirectangular"]')
         line = line.replace('D_Mars',              'Mars')
         line = line.replace('Central_Meridian',    'central_meridian')
         line = line.replace('False_Northing',      'false_northing')
@@ -64,14 +64,15 @@ def editProjFile(projPath):
             s1     = line.find('Standard_Parallel_1')
             s2     = line.find(',', s1)
             s3     = line.find(']', s2)
-            number = line[s2+1:s3-1]
-        line = line.replace('PARAMETER["Standard_Parallel_1",'+number+']',
+            number = line[s2+1:s3]
+            line = line.replace('PARAMETER["Standard_Parallel_1",'+number+']',
                             'PARAMETER["standard_parallel_1",'+number+'],PARAMETER["latitude_of_origin",'+number+']')       
         outputFile.write(line)
     
     # Clean up
     inputFile.close()
     outputFile.close()
+
     return outputPath
     
 
@@ -125,7 +126,9 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     print(cmd)
     os.system(cmd)
     
-    prjText=correctedProjPath.read()
+    f = open(correctedProjPath, 'r')
+    prjText=f.read()
+    f.close()
     print prjText
     cmd = 'gdal_edit.py -a_srs "'+ prjText +'"  '+ outputPath
     print(cmd)
