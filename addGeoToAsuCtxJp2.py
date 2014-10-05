@@ -37,6 +37,42 @@ class Usage(Exception):
 def replaceFileExtension(inputPath, ext):
     '''Replace the extension on a file'''
     return os.path.splitext(inputPath)[0] + ext
+
+    
+def editProjFile(projPath):
+    '''Modifies a .prj file so it matches a specific format'''
+    
+    if not os.path.exists(projPath):
+        raise Exception('isis3world.pl script failed to create required output files!')
+
+    # Open files    
+    outputPath = projPath + '.edit.prj'
+    inputFile  = open(projPath,   'r')
+    outputFile = open(outputPath, 'w')
+    
+    # Replace specific text
+    for line in inputFile:
+        line = line.replace('D_Mars', 'Mars')
+        line = line.replace('PROJECTION["Equidistant_Cylindrical"]',
+                            'PROJECTION["Equirectangular"],')
+        line = line.replace('D_Mars',              'Mars')
+        line = line.replace('Central_Meridian',    'central_meridian')
+        line = line.replace('False_Northing',      'false_northing')
+        line = line.replace('False_Easting',       'false_easting')
+        line = line.replace('UNIT["Meter",1.0]',       'UNIT["meter",1.0,AUTHORITY["EPSG","9001"]]')
+        if 'Standard_Parallel_1' in line:
+            s1     = line.find('Standard_Parallel_1')
+            s2     = line.find(',', s1)
+            s3     = line.find(']', s2)
+            number = line[s2+1:s3-1]
+        line = line.replace('PARAMETER["Standard_Parallel_1",'+number+']',
+                            'PARAMETER["standard_parallel_1",'+number+'],PARAMETER["latitude_of_origin",'+number+']')       
+        outputFile.write(line)
+    
+    # Clean up
+    inputFile.close()
+    outputFile.close()
+    return outputPath
     
 
 def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
@@ -71,23 +107,37 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     #mv .j2w <INPUT FOLDER>/B01_009838_2108_XI_30N319W.j2w
     #mv .prj <INPUT FOLDER>/B01_009838_2108_XI_30N319W.prj
 
-    if (not os.path.exists(prjPath)):
-        raise Exception('isis3world.pl script failed to create required output files!')
+    correctedProjPath = editProjFile(prjPath)
+
+    if (not os.path.exists(correctedProjPath)):
+        raise Exception('Failed to correct proj file!')
+    
 
     # Next conversion command
-    cmd = 'gdal_translate -of VRT -a_srs ESRI::"'+ prjPath +'" -a_nodata 0  '+ inputJp2Path +' '+ vrtPath
+    #cmd = 'gdal_translate -of VRT -a_srs ESRI::"'+ prjPath +'" -a_nodata 0  '+ inputJp2Path +' '+ vrtPath
+
+    ## Finish the conversion
+    #cmd = 'gdal_translate -of JP2OpenJPEG '+ vrtPath +' '+ outputPath
+    #print(cmd)
+    #os.system(cmd)
+    
+    cmd = 'cp '+ inputJp2Path +'  '+ outputPath
+    print(cmd)
+    os.system(cmd)
+    
+    prjText=correctedProjPath.read()
+    print prjText
+    cmd = 'gdal_edit.py -a_srs "'+ prjText +'"  '+ outputPath
     print(cmd)
     os.system(cmd)
 
-    # Finish the conversion
-    cmd = 'gdal_translate -of JP2OpenJPEG '+ vrtPath +' '+ outputPath
-    print(cmd)
-    os.system(cmd)
+
 
     # Clean up temporary files
     if not keep:
-        os.remove(vrtPath)
+        #os.remove(vrtPath)
         os.remove(prjPath)
+        os.remove(correctedProjPath)
 
     return True
 
