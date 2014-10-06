@@ -77,7 +77,7 @@ def editProjFile(projPath):
     return outputPath
    
 
-def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
+def addGeoDataToAsuJp2File(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     """Does the actual work of adding the geo data"""
 
     if not os.path.exists(inputJp2Path):
@@ -129,19 +129,23 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
     #print(cmd)
     #os.system(cmd)
     
-    # Copy the input image to the output path
-    cmd = 'cp '+ inputJp2Path +'  '+ outputPath
-    print(cmd)
-    os.system(cmd)
+    # Copy the input image to the output path if different
+    if (outputPath != inputJp2Path):
+        cmd = 'cp '+ inputJp2Path +'  '+ outputPath
+        print(cmd)
+        os.system(cmd)
     
     # Add metadata to the output image, specifying a projecting string and projected coordinate boundaries.
     f = open(correctedProjPath, 'r')
     prjText=f.read()
     f.close()
-    print prjText
-    cmd = 'gdal_edit.py -a_ullr ' + projectedBoundsString + ' --a_srs "'+ prjText +'"  '+ outputPath
+    #print prjText
+    cmd = 'gdal_edit.py -a_ullr ' + projectedBoundsString + ' -a_srs "'+ prjText +'"  '+ outputPath
     print(cmd)
     os.system(cmd)
+
+    # gdal_edit.py actually puts the metadata here, the input file is not touched!
+    sidecarPath = outputPath + '.aux.xml'
 
     # Clean up temporary files
     if not keep:
@@ -149,7 +153,7 @@ def addGeoData(inputJp2Path, inputHeaderPath, outputPath, keep=False):
         os.remove(prjPath)
         os.remove(correctedProjPath)
 
-    return True
+    return (outputPath, sidecarPath)
 
 def main():
 
@@ -158,7 +162,7 @@ def main():
 
     try:
         try:
-            usage = "usage: addGeoToAsuCtxJp.py <inputPath> <outputPath> [--keep][--manual]\n  "
+            usage = "usage: addGeoToAsuCtxJp.py <inputPath> [<outputPath>] [--keep][--manual]\n  "
             parser = optparse.OptionParser(usage=usage)
 
             parser.set_defaults(keep=False)
@@ -178,7 +182,7 @@ def main():
             if len(args) > 1:
                 options.outputPath = args[1]
             else:
-                options.outputPath = replaceFileExtension(options.inputJp2Path, '.tif')
+                options.outputPath = inputPath # In-place correction
             
             # If the path to the header file was not provided, assume the default naming convention
             if options.inputHeaderFile == "":
@@ -189,7 +193,9 @@ def main():
 
         startTime = time.time()
 
-        addGeoData(options.inputJp2Path, options.inputHeaderFile, options.outputPath, options.keep)
+        (outputPath, sidecarPath) = addGeoDataToAsuJp2File(options.inputJp2Path, options.inputHeaderFile, options.outputPath, options.keep)
+
+        print 'Created files ' + outputPath + ' and ' + sidecarPath
 
         endTime = time.time()
 
