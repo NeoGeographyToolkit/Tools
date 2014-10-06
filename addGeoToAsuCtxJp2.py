@@ -139,8 +139,7 @@ def addGeoDataToAsuJp2File(inputJp2Path, inputHeaderPath, outputPath, keep=False
     f = open(correctedProjPath, 'r')
     prjText=f.read()
     f.close()
-    #print prjText
-    cmd = 'gdal_edit.py -a_ullr ' + projectedBoundsString + ' -a_srs "'+ prjText +'"  '+ outputPath
+    cmd = 'gdal_edit.py -mo "AREA_OR_POINT=Area"  -a_ullr ' + projectedBoundsString + ' -a_srs "'+ prjText +'"  '+ outputPath
     print(cmd)
     os.system(cmd)
 
