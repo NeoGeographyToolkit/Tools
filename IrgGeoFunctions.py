@@ -231,8 +231,21 @@ def getProjectedBoundsFromIsisLabel(filePath):
 
     return (minX, maxX, minY, maxY)
 
+def getProjectionFromIsisLabel(filePath):
+    '''Function to read the projection type from an ISIS label file'''
 
-
+    if not os.path.exists(filePath):
+        raise Exception('Error, missing label file path!')
+    
+    f = open(filePath, 'r')
+    for line in f:
+        if ('MAP_PROJECTION_TYPE          =' in line) or ('ProjectionName     =' in line):
+            line = line.replace('"','') # Strip quotes
+            projType = IrgStringFunctions.getLineAfterText(line, '=')
+            f.close()
+            return projType
+    f.close()
+    raise Exception('Unable to find projection type in file ' + filePath)
 
 def getBoundingBoxFromIsisLabel(filePath):
     '''Function to read the bounding box from an ISIS label file'''
