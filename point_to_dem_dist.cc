@@ -178,8 +178,6 @@ double calc_mean(vector<double> const& errs, int len){
   return mean/len;
 }
 
-
-
 typedef InterpolationView< EdgeExtensionView< ImageViewRef< PixelMask<float> >, 
                                         ConstantEdgeExtension>, 
                            BilinearInterpolation> InterpolationReadyDem;
@@ -257,6 +255,15 @@ Vector2 compute_dem_mean_lonlat(vw::cartography::GeoReference const & georef,
 
 //----------------------------------------------------------------------------
 
+double calc_rmse(vector<double> const& errs, int len){
+  double sum = 0.0;
+  for (int i = 0; i < len; i++){
+    sum += errs[i]*errs[i];
+  }
+  if (len == 0) return 0;
+  return std::sqrt(sum/len);
+}
+
 int main( int argc, char *argv[] ){
 
   Options opt;
@@ -315,6 +322,8 @@ int main( int argc, char *argv[] ){
              << " 16%: " << p16 << ", 50%: " << p50 << ", 84%: " << p84 << endl;
     double mean = calc_mean(valid_errors, len);
     vw_out() << "Mean error: " << mean << std::endl;
+    double rmse = calc_rmse(valid_errors, len);
+    vw_out() << "RMSE: " << rmse << std::endl;
 
     // Save the errors
     std::string output_file = opt.output_prefix + "-sample.csv";
