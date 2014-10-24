@@ -90,9 +90,12 @@ void handle_arguments( int argc, char *argv[], Options& opt ) {
   positional_desc.add("dem", 1);
 
   string usage("<csv> <dem>");
+  bool allow_unregistered = false;
+  std::vector<std::string> unregistered;
   po::variables_map vm =
     asp::check_command_line( argc, argv, opt, general_options, general_options,
-                             positional, positional_desc, usage );
+                             positional, positional_desc, usage,
+                             allow_unregistered, unregistered);
 
   if ( opt.dem.empty() || opt.csv.empty() )
     vw_throw( ArgumentErr() << "Missing input files.\n"
