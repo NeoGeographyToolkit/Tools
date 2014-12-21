@@ -51,14 +51,14 @@ def correctTifPast180(tiffPath):
     # Get the planetary radius out of the proj4 string
     aRadPos = outputText.find('+a=') + 3
     bRadPos = outputText.find('+b=') + 3
-    aRadEnd = outputText.find(' ', arRadPos)
-    bRadEnd = outputText.find(' ', brRadPos)
+    aRadEnd = outputText.find(' ', aRadPos)
+    bRadEnd = outputText.find(' ', bRadPos)
     aRad    = float(outputText[aRadPos:aRadEnd])
     bRad    = float(outputText[bRadPos:bRadEnd])
     if aRad != bRad:
         raise Exception('Only spherical ellipsoids are supported!')
     
-
+    # Extract the projection space corner coordinates
     ulPos = outputText.find('Upper Left')
     lrPos = outputText.find('Lower Right')
 
@@ -70,18 +70,46 @@ def correctTifPast180(tiffPath):
     ulCoord = outputText[ulCoordStart+1:ulCoordStop-1]
     lrCoord = outputText[lrCoordStart+1:lrCoordStop-1]
 
-    ulx = float(ulCoord.split(',')[0])
+    ulx = float(ulCoord.split(',')[0]) # These are X and Y projection space coordinates
     uly = float(ulCoord.split(',')[1])
     lrx = float(lrCoord.split(',')[0])
     lry = float(lrCoord.split(',')[1])
     
+    # Compute distances in projection space
     PI     = 3.14159265358979323846264338327950288419716939937510
     radius = aRad 
     onePiR = radius * PI #5458203.07635 # 180 degree distance along planet's equator
-    twoPiR = radius * two * PI #10916406.153 # Circumference of the Planet's equator
+    twoPiR = radius * 2.0 * PI #10916406.153 # Circumference of the Planet's equator
+
+
+    # Extract the current proj4 string
+    proj4Pos       = outputText.find("+proj=")
+    proj4End       = outputText.find("'", proj4Pos) - 1 # Relies on proj4 string ending with a ' symbol
+    oldProj4String = outputText[proj4Pos:proj4End]
+
+    # Get the value of +lon_0
+    lon0Pos       = oldProj4String.find('+lon_0=') + 7
+    lon0End       = oldProj4String.find(' ', lon0Pos)
+    oldLon0String = oldProj4String[lon0Pos-7:lon0End]
+    lon0          = float(oldProj4String[lon0Pos:lon0End])
+
+    if lon0 == 0.0: # No need to change the proj4 string
+        newProj4String = oldProj4String
+    else:
+        # Need to change the lon_0 value to zero and account for it
+        newProj4String = oldProj4String.replace(oldLon0String, '+lon_0=0')
+        
+        # This amount is being implicitly added to the projected coordinates
+        lon0Correction = lon0 * (PI / 180) * radius
+        ulx += lon0Correction
+        lrx += lon0Correction
+
+
+    # In order for many programs to ingest data, the projected space coordinates must
+    #  be in the +/- 180 degree (onePiR) range.
 
     if (abs(ulx) < onePiR) and (abs(lrx) < onePiR):
-        # Both images are in the +/-180 degree range, no correction needed!
+        print 'Both images are in the +/-180 degree range, no correction needed!'
         return True
 
     if (abs(ulx) < onePiR) or (abs(lrx) < onePiR):
@@ -94,10 +122,13 @@ def correctTifPast180(tiffPath):
         offset = twoPiR * -1
 
     # Perform an in-place correction on the file
-    #cmd = '~/programs/gdal_install/bin/gdal_edit.sh ' + tiffPath +' -a_ullr '+ str(ulx+offset) +' '+ str(uly) +' '+ str(lrx + offset) +' '+ str(lry)
-    cmd = 'gdal_edit.py ' + tiffPath +' -a_ullr '+ str(ulx+offset) +' '+ str(uly) +' '+ str(lrx + offset) +' '+ str(lry)
+    cmd = '/home/pirl/smcmich1/programs/gdal-1.11.0-install/bin/gdal_edit.sh ' + tiffPath + ' -a_srs "'+newProj4String +'" -a_ullr '+ str(ulx+offset) +' '+ str(uly) +' '+ str(lrx + offset) +' '+ str(lry)
+    #cmd = 'gdal_edit.py ' + tiffPath + ' -a_srs "'+newProj4String +'" -a_ullr '+ str(ulx+offset) +' '+ str(uly) +' '+ str(lrx + offset) +' '+ str(lry)
     print cmd
     os.system(cmd)
+
+    # We could use gdal_translate to do this but it would not be in-place.  This is an issue
+    #   for large images we don't want to copy.
 
     return 0
     
@@ -142,7 +173,7 @@ def main():
         except optparse.OptionError, msg:
             raise Usage(msg)
 
-        if (normEqcLon):
+        if (options.normEqcLon):
             return correctTifPast180(tiffPath)
 
 
