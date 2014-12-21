@@ -115,6 +115,25 @@ def getImageGeoInfo(imagePath, getStats=True):
         
     return outputDict
 
+def doesImageHaveGeoData(imagePath):
+    '''Returns true if a file has geo data associated with it'''
+    
+    if not os.path.exists(imagePath):
+        raise Exception('Image file ' + imagePath + ' not found!')
+    
+    # Call command line tool silently
+    cmd = ['gdalinfo', imagePath, '-proj4']
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    textOutput, err = p.communicate()
+    
+    # For now we just do a very simple check
+    if "Coordinate System is `'" in textOutput:
+        return False
+    else:
+        return True
+    
+
+
 def getImageStats(imagePath):
     """Obtains some image statistics from gdalinfo"""
     
