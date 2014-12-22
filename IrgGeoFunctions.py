@@ -76,6 +76,12 @@ def getImageGeoInfo(imagePath, getStats=True):
     outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
     outputDict['central_meridian']    = getGdalInfoTagValue(textOutput, 'central_meridian')
 
+    # TODO: Get the projection type!
+    if '+proj=eqc' in textOutput:
+        outputDict['projection'] = 'EQUIRECTANGULAR'
+    elif '+proj=ster' in textOutput:
+        outputDict['projection'] = 'POLAR STEREOGRAPHIC'
+    outputDict['projection'] = 'UNKNOWN'
     
     # Extract this variable which ASP inserts into its point cloud files
     try:
