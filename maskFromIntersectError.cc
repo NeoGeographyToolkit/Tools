@@ -41,6 +41,17 @@ namespace po = boost::program_options;
 
 using namespace vw;
 
+
+
+// Allows FileIO to correctly read/write these pixel types
+namespace vw {
+  template<> struct PixelFormatID<Vector3>   { static const PixelFormatEnum value = VW_PIXEL_GENERIC_3_CHANNEL; };
+  template<> struct PixelFormatID<Vector3f>  { static const PixelFormatEnum value = VW_PIXEL_GENERIC_3_CHANNEL; };
+}
+
+
+
+
 /// \file maskFromIntersectError.cc Generates a good pixel mask of all pixels with
 ///                                 intersection error below a threshold.
 
@@ -145,8 +156,10 @@ int main( int argc, char *argv[] ) {
 
   try {
   
+    //TODO: Check if the input image is one or three channels
     // Set up input from file
     vw::DiskImageView<PixelRGB<float> > inputImage(inputImagePath);
+    //vw::DiskImageView<Vector3> inputImage(inputImagePath);
 
 
     // Attempt to extract nodata value
@@ -173,6 +186,7 @@ int main( int argc, char *argv[] ) {
     vw::cartography::read_georeference(georef, inputImagePath);
     write_georeference( *r, georef );
 
+//write_georeferenced_image -> look up
     // Do everything!
     vw::block_write_image( *r, outputView,
                           vw::TerminalProgressCallback( "maskFromIntersectError", "Generating mask:") );

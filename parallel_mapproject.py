@@ -323,12 +323,12 @@ def main(argsIn):
     # - The numbers in braces will receive the values from the text file we wrote earlier
     # - The output path used here does not matter since spawned copies compute the correct tile path.
     commandList   = ['parallel_mapproject.py',  '--pixelStartX', '{1}',
-                                                     '--pixelStartY', '{2}',
-                                                     '--pixelStopX',  '{3}',
-                                                     '--pixelStopY',  '{4}',
-                                                     '--threads', '1', # Only use on thread internally, parallel will handle things.
-                                                     '--work-dir', tempFolder,
-                                                     options.demPath, options.imagePath, options.outputPath]
+                                                '--pixelStartY', '{2}',
+                                                '--pixelStopX',  '{3}',
+                                                '--pixelStopY',  '{4}',
+                                                '--threads', '1', # Only use on thread internally, parallel will handle things.
+                                                '--work-dir', tempFolder,
+                                                options.demPath, options.imagePath, options.outputPath]
     if options.convertTiles:
         commandList = commandList + ['--convert-tiles']
     if options.suppressOutput:

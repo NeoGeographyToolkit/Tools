@@ -112,12 +112,12 @@ private:
 
 
 template <class ImageT>
-void write_geotiff_image( std::string              const& filename,
-                          vw::ImageViewBase<ImageT>    const& image,
-                          vw::cartography::GeoReference             const& georef,
-                          double nodata_val,
+void write_geotiff_image( std::string                   const& filename,
+                          vw::ImageViewBase<ImageT>     const& image,
+                          vw::cartography::GeoReference const& georef,
+                          double                        const  nodata_val,
                           asp::Options                  const& opt,
-                          vw::TerminalProgressCallback const& tpc ) {
+                          vw::TerminalProgressCallback  const& tpc ) {
 
   std::map<std::string, std::string> keywords;
   asp::block_write_gdal_image(filename, image.impl(), georef,

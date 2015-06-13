@@ -45,14 +45,13 @@ def getGdalInfoTagValue(text, tag):
     except Exception: # Requested tag was not found
         return None
 
-# TODO: This can take a long time due to the stats call!
+# This can take a while if stats are requested
 def getImageGeoInfo(imagePath, getStats=True):
     """Obtains some image geo information from gdalinfo in dictionary format"""
     
     outputDict = {}
     
     # Call command line tool silently
-    # TODO: Make stats call optional, it adds a lot of time.
     cmd = ['gdalinfo', imagePath, '-proj4']
     if getStats:
         cmd.append('-stats')
@@ -70,7 +69,14 @@ def getImageGeoInfo(imagePath, getStats=True):
     originVals    = IrgStringFunctions.getNumbersInParentheses(originLine)
     pixelSizeVals = IrgStringFunctions.getNumbersInParentheses(pixelSizeLine)
     outputDict['origin']     = originVals
-    outputDict['pixel size'] = pixelSizeVals
+    outputDict['pixel_size'] = pixelSizeVals
+
+    # Get bounding box in projected coordinates
+    upperLeftLine  = IrgStringFunctions.getLineAfterText(textOutput, 'Upper Left')
+    lowerRightLine = IrgStringFunctions.getLineAfterText(textOutput, 'Lower Right')
+    (minX, maxY)   = IrgStringFunctions.getNumbersInParentheses(upperLeftLine)
+    (maxX, minY)   = IrgStringFunctions.getNumbersInParentheses(lowerRightLine)
+    outputDict['projection_bounds'] = (minX, maxX, minY, maxY)
 
     # Get some proj4 values
     outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
@@ -181,6 +187,9 @@ def getImageStats(imagePath):
 def getGeoTiffBoundingBox(geoTiffPath):
     """Returns (minLon, maxLon, minLat, maxLat) for a geotiff image"""
     
+    if not os.path.exists(geoTiffPath):
+        raise Exception('Input file does not exist: ' + geoTiffPath)
+    
     # Call command line tool silently
     cmd = ['geoRefTool', '--printBounds', geoTiffPath]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -191,10 +200,16 @@ def getGeoTiffBoundingBox(geoTiffPath):
         raise Exception('Error: getGeoTiffBoundingBox failed on input image: ' + geoTiffPath)
     
     # Parse the output
-    minLat = float( IrgStringFunctions.getLineAfterText(textOutput, 'Min latitude  =') )
-    maxLat = float( IrgStringFunctions.getLineAfterText(textOutput, 'Max latitude  =') )
-    minLon = float( IrgStringFunctions.getLineAfterText(textOutput, 'Min longitude =') )
-    maxLon = float( IrgStringFunctions.getLineAfterText(textOutput, 'Max longitude =') )
+    try:
+        minLat = float( IrgStringFunctions.getLineAfterText(textOutput, 'Min latitude  =') )
+        maxLat = float( IrgStringFunctions.getLineAfterText(textOutput, 'Max latitude  =') )
+        minLon = float( IrgStringFunctions.getLineAfterText(textOutput, 'Min longitude =') )
+        maxLon = float( IrgStringFunctions.getLineAfterText(textOutput, 'Max longitude =') )
+    except Exception,e:
+        print 'In file: ' + geoTiffPath
+        print 'In text:'
+        print textOutput
+        raise e
     
     return (minLon, maxLon, minLat, maxLat)
 

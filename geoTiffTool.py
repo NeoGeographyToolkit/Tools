@@ -108,6 +108,28 @@ def correctTifPast180(tiffPath):
     # In order for many programs to ingest data, the projected space coordinates must
     #  be in the +/- 180 degree (onePiR) range.
 
+    # Extract the current proj4 string
+    proj4Pos       = outputText.find("+proj=")
+    proj4End       = outputText.find("'", proj4Pos) - 1 # Relies on proj4 string ending with a ' symbol
+    oldProj4String = outputText[proj4Pos:proj4End]
+
+    # Get the value of +lon_0
+    lon0Pos       = oldProj4String.find('+lon_0=') + 7
+    lon0End       = oldProj4String.find(' ', lon0Pos)
+    oldLon0String = oldProj4String[lon0Pos-7:lon0End-1]
+    lon0          = float(oldLon0String)
+
+    if lon0 == 0: # No need to change the proj4 string
+        newProj4String = oldProj4String
+    else:
+        # Need to change the lon_0 value to zero and account for it
+        newProj4String = oldProj4String.replace(oldLon0String, '+lon_0=0')
+        
+        # This amount is being implicitly added to the projected coordinates
+        lon0Correction = lon0 * (PI/180.0) * radius
+        ulx += lon0Correction
+        lrx += lon0Correction
+
     if (abs(ulx) < onePiR) and (abs(lrx) < onePiR):
         print 'Both images are in the +/-180 degree range, no correction needed!'
         return True

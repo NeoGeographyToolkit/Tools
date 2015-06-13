@@ -156,7 +156,8 @@ bool produceInterestPoints(const Parameters &params)
 
   // Call function to find the matching interest points
   printf("Calling ipfind\n");
-  bool ipFindResult = asp::ip_matching_w_alignment(&leftCameraModel, &rightCameraModel,
+  bool ipFindResult = asp::ip_matching_w_alignment(true,
+                                                   &leftCameraModel, &rightCameraModel,
                                                    leftDiskImage,    rightDiskImage,
                                                    datum, params.outputPath,
                                                    noData1, noData2);
