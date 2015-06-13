@@ -359,6 +359,7 @@ def getCubeCenterLatitude(cubePath, workDir='tmp'):
     # Call caminfo (from ISIS) on the input cube to find out the CenterLatitude value
     camInfoOuputPath = workDir + "/camInfoOutput.txt"
     cmd = 'caminfo from=' + cubePath + ' to=' + camInfoOuputPath
+    print cmd
     os.system(cmd)
 
     if not os.path.exists(camInfoOuputPath):
@@ -372,7 +373,7 @@ def getCubeCenterLatitude(cubePath, workDir='tmp'):
             centerLatitude = IrgStringFunctions.getNumberAfterEqualSign(line, )
             break
     # Make sure we found the desired value
-    if (centerLatitude == -9999):          
+    if (centerLatitude == -9999) or (isinstance(centerLatitude, basestring)):
         raise Exception("Unable to find CenterLatitude from file " + cubePath)
 
     # Clean up temporary file

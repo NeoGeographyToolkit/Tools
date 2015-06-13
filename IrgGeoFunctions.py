@@ -281,7 +281,7 @@ def getProjectionFromIsisLabel(filePath):
     for line in f:
         if ('MAP_PROJECTION_TYPE          =' in line) or ('ProjectionName     =' in line):
             line = line.replace('"','') # Strip quotes
-            projType = IrgStringFunctions.getLineAfterText(line, '=')
+            projType = IrgStringFunctions.getLineAfterText(line, '=').strip()
             f.close()
             return projType
     f.close()

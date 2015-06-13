@@ -95,7 +95,7 @@ void handle_arguments( int argc, char *argv[], Options& opt ) {
   po::variables_map vm =
     asp::check_command_line( argc, argv, opt, general_options, general_options,
                              positional, positional_desc, usage,
-                             allow_unregistered, unregistered);
+                             allow_unregistered, unregistered );
 
   if ( opt.dem.empty() || opt.csv.empty() )
     vw_throw( ArgumentErr() << "Missing input files.\n"
