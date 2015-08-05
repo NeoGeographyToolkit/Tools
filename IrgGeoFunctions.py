@@ -20,7 +20,7 @@
 """IrgGeoFunctions.py - Functions for working with different geo-data formats"""
 
 import sys, os, glob, re, shutil, subprocess, string, time, errno
-
+import re
 import IrgIsisFunctions, IrgStringFunctions
 
 
@@ -44,6 +44,58 @@ def getGdalInfoTagValue(text, tag):
     
     except Exception: # Requested tag was not found
         return None
+
+def parseLonLatDMS(s):
+    '''Parses a single DMS number like 177d16'20.85"E'''
+    # Clear whitespace
+    s = s.strip()
+    
+    # Determine if this is a positive or negative degree values
+    isNeg = 1.0
+    if ('W' in s) or ('S' in s):
+        isNeg = -1.0
+
+    s = s[:-2] # Strip compass direction and "
+    
+    # Extract DMS components
+    dms = re.split("""d|'""", s)
+    
+    # Convert to decimal
+    value = float(dms[0]) + float(dms[1])/60.0 + float(dms[2])/3600.0
+    return value * isNeg
+    
+
+def parseGdalLonLatBounds(line):
+    """Finds and parses the lonlat information in a line like this:
+        Upper Left  ( -161674.633, 1392019.475) (177d16'20.85"E, 23d29' 2.91"N) """
+    
+    numberSets = []
+    
+    # Find all number sets in the text
+    parenGroups = re.findall( r'''\([ \d.,-dEWNS'"]*\)''', line) 
+    
+    # The projected coordinates should always be there but 
+    #  not always the DMS coordinates
+    for p in parenGroups:
+    
+        numberText = p[1:-1] # Remove ()
+        numberList = numberText.split(',')
+        if ('E' in numberText or 'N' in numberText or 'S' in numberText or 'W' in numberText):
+            # DMS coordinates
+            numbers = [parseLonLatDMS(numberList[0]), 
+                       parseLonLatDMS(numberList[1])]
+        else: # Projected coordinates, easy to parse
+            numbers = []
+            for n in numberList: # Convert strings to floats
+                numbers.append(float(n))
+        numberSets.append(numbers) # Add this set of numbers to output list
+
+    # If only one set of numbers return a list
+    if len(numberSets) == 1:
+        return numberSets[0]
+    else: # Otherwise return a list of lists
+        return numberSets
+
 
 # This can take a while if stats are requested
 def getImageGeoInfo(imagePath, getStats=True):
@@ -71,12 +123,25 @@ def getImageGeoInfo(imagePath, getStats=True):
     outputDict['origin']     = originVals
     outputDict['pixel_size'] = pixelSizeVals
 
-    # Get bounding box in projected coordinates
+    # Get bounding box in projected coordinates and possibly lonlat coordinates
     upperLeftLine  = IrgStringFunctions.getLineAfterText(textOutput, 'Upper Left')
     lowerRightLine = IrgStringFunctions.getLineAfterText(textOutput, 'Lower Right')
-    (minX, maxY)   = IrgStringFunctions.getNumbersInParentheses(upperLeftLine)
-    (maxX, minY)   = IrgStringFunctions.getNumbersInParentheses(lowerRightLine)
+    ulCoords       = parseGdalLonLatBounds(upperLeftLine)
+    brCoords       = parseGdalLonLatBounds(lowerRightLine)
+    if (len(ulCoords) == 2):
+        (minX,   maxY)   = ulCoords[0]
+        (maxX,   minY)   = brCoords[0]
+        (minLon, maxLat) = ulCoords[1]
+        (maxLon, minLat) = brCoords[1]
+        while (maxLon < minLon): # Get lon values in the same degree range
+            maxLon += 360.0
+        outputDict['lonlat_bounds'] = (minLon, maxLon, minLat, maxLat)
+    else:
+        (minX, maxY) = ulCoords
+        (maxX, minY) = brCoords
     outputDict['projection_bounds'] = (minX, maxX, minY, maxY)
+
+    
 
     # Get some proj4 values
     outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
