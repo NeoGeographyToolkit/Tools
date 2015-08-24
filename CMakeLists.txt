@@ -128,7 +128,7 @@ find_package(VisionWorkbench REQUIRED
 message("Found vision workbench include directory: ${VISIONWORKBENCH_INCLUDE_DIRS}")
 
 
-find_package(StereoPipeline REQUIRED COMPONENTS core spiceIO isisIO)
+find_package(StereoPipeline REQUIRED COMPONENTS core camera spiceIO isisIO)
 
 
 
@@ -174,6 +174,9 @@ target_link_libraries(geoRefTool  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES
 
 add_executable(maskFromIntersectError maskFromIntersectError.cc) 
 target_link_libraries(maskFromIntersectError  ${VISIONWORKBENCH_LIBRARIES} ${Boost_LIBRARIES}) 
+
+add_executable(dem_to_pc convert_dem_to_pc.cc) 
+target_link_libraries(dem_to_pc ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
 
 # TODO: Remove ASP dependencies.
 add_executable(applyMask applyMask.cc) 

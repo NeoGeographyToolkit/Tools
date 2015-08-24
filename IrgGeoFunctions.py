@@ -141,6 +141,24 @@ def getImageGeoInfo(imagePath, getStats=True):
         (maxX, minY) = brCoords
     outputDict['projection_bounds'] = (minX, maxX, minY, maxY)
 
+    # Try to read in a set of ground control points
+    # - TODO: Read in the GCP projection info!
+    if 'GCP[' in textOutput:
+        # Split the text into lines, then look for that symbol at each line
+        lines = textOutput.split('\n')
+        gcpList = []
+        foundGcp = False
+        for line in lines:
+            if foundGcp: # Parse the lines following the GCP tag to get the coordinates
+                numSets = IrgStringFunctions.getNumbersInParentheses(line, brackets=False)
+                gcpList.append(numSets) # This should be in the correct format
+                foundGcp = False
+            if 'GCP[' in line:
+                foundGcp = True
+                # Do we need the GCP ID number?
+                #index = IrgStringFunctions.getNumbersInParentheses(line, brackets=True)[0]
+        outputDict['GCPs'] = gcpList
+            
     # Get some proj4 values
     outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
     outputDict['central_meridian']    = getGdalInfoTagValue(textOutput, 'central_meridian')
@@ -150,7 +168,8 @@ def getImageGeoInfo(imagePath, getStats=True):
         outputDict['projection'] = 'EQUIRECTANGULAR'
     elif '+proj=ster' in textOutput:
         outputDict['projection'] = 'POLAR STEREOGRAPHIC'
-    outputDict['projection'] = 'UNKNOWN'
+    else:
+        outputDict['projection'] = 'UNKNOWN'
     
     # Extract this variable which ASP inserts into its point cloud files
     try:

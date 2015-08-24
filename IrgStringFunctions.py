@@ -65,13 +65,16 @@ def getLineAfterText(text, prefix, startPos=0, includeText=False):
     else:
         return text[prefixEnd:nextEnd]
     
-def getNumbersInParentheses(text):
+def getNumbersInParentheses(text, brackets=False):
     """Returns all sets of numbers in parentheses"""
     
     numberSets = []
     
     # Find all number sets in the text
-    parenGroups = re.findall( r'\([ \d.,-]*\)', text) 
+    regexString = r'\([ \d.,-]*\)' # Find numbers in () tags
+    if brackets: # Find numbers in [] tags
+        r'\[[ \d.,-]*\]'
+    parenGroups = re.findall(regexString, text) 
 
     for p in parenGroups:
         numberText = p[1:-1] # Remove ()
