@@ -90,11 +90,11 @@ def parseGdalLonLatBounds(line):
                 numbers.append(float(n))
         numberSets.append(numbers) # Add this set of numbers to output list
 
-    # If only one set of numbers return a list
-    if len(numberSets) == 1:
-        return numberSets[0]
-    else: # Otherwise return a list of lists
-        return numberSets
+    ## If only one set of numbers return a list
+    #if len(numberSets) == 1:
+    #    return numberSets[0]
+    #else: # Otherwise return a list of lists
+    return numberSets
 
 
 # This can take a while if stats are requested
@@ -128,18 +128,19 @@ def getImageGeoInfo(imagePath, getStats=True):
     lowerRightLine = IrgStringFunctions.getLineAfterText(textOutput, 'Lower Right')
     ulCoords       = parseGdalLonLatBounds(upperLeftLine)
     brCoords       = parseGdalLonLatBounds(lowerRightLine)
+
+    (minX, maxY) = ulCoords[0]
+    (maxX, minY) = brCoords[0]
+    outputDict['projection_bounds'] = (minX, maxX, minY, maxY)
+
     if (len(ulCoords) == 2):
-        (minX,   maxY)   = ulCoords[0]
-        (maxX,   minY)   = brCoords[0]
         (minLon, maxLat) = ulCoords[1]
         (maxLon, minLat) = brCoords[1]
         while (maxLon < minLon): # Get lon values in the same degree range
             maxLon += 360.0
         outputDict['lonlat_bounds'] = (minLon, maxLon, minLat, maxLat)
-    else:
-        (minX, maxY) = ulCoords
-        (maxX, minY) = brCoords
-    outputDict['projection_bounds'] = (minX, maxX, minY, maxY)
+
+    
 
     # Try to read in a set of ground control points
     # - TODO: Read in the GCP projection info!
