@@ -63,6 +63,8 @@ using namespace vw;
 using namespace vw::cartography;
 using namespace std;
 
+// TODO: Several of these functions are already present in pc_align
+
 struct Options: asp::BaseOptions {
   // Input
   string csv, dem;
@@ -80,10 +82,8 @@ void handle_arguments( int argc, char *argv[], Options& opt ) {
 
   po::options_description positional("");
   positional.add_options()
-    ("csv", po::value(&opt.csv),
-     "The csv file to find the distances from.")
-    ("dem", po::value(&opt.dem),
-     "The dem to the find distances to.");
+    ("csv", po::value(&opt.csv), "The csv file to find the distances from.")
+    ("dem", po::value(&opt.dem), "The dem to the find distances to.");
   
   po::positional_options_description positional_desc;
   positional_desc.add("csv", 1);
@@ -101,31 +101,36 @@ void handle_arguments( int argc, char *argv[], Options& opt ) {
     vw_throw( ArgumentErr() << "Missing input files.\n"
               << usage << general_options );
 
+  // Set default output prefix if none was passed in
   if ( opt.output_prefix.empty() ) {
-    opt.output_prefix =
-      fs::basename(opt.csv) + "__" + fs::basename(opt.dem);
+    opt.output_prefix = fs::basename(opt.csv) + "__" + fs::basename(opt.dem);
   }
   asp::create_out_dir(opt.output_prefix);
 
 }
 
+/// Helper function to check for parsing errors
 void null_check(const char* token, string const& line){
   if (token == NULL)
     vw_throw( vw::IOErr() << "Failed to read line: " << line << "\n" );
 }
 
-void load_csv(string const& file_name,
+/// Parse CSV file consisting of lat/lon/height triplets with an optional header.
+void load_csv(string             const& file_name,
               cartography::Datum const& datum,
-              vector<Vector3> & lon_lat_height
+              vector<Vector3>         & lon_lat_height
               ){
-  
+  // Set up string copy buffer
   const int bufSize = 1024;
   char temp[bufSize];
+  
+  // Try to load the input file
   ifstream file( file_name.c_str() );
   if( !file ) {
     vw_throw( vw::IOErr() << "Unable to open file \"" << file_name << "\"" );
   }
 
+  // Loop through all the lines of the file
   string line;
   char sep[] = ", \t";
   bool is_first_line = true;
@@ -134,13 +139,16 @@ void load_csv(string const& file_name,
     double lat, lon, height;
     
     strncpy(temp, line.c_str(), bufSize);
-    const char* token = strtok(temp, sep); null_check(token, line);
+    const char* token = strtok(temp, sep); 
+    null_check(token, line); // Throw if the token is null
     int ret = sscanf(token, "%lg", &lat);
     
-    token = strtok(NULL, sep); null_check(token, line);
+    token = strtok(NULL, sep); 
+    null_check(token, line);
     ret += sscanf(token, "%lg", &lon);
     
-    token = strtok(NULL, sep); null_check(token, line);
+    token = strtok(NULL, sep); 
+    null_check(token, line);
     ret += sscanf(token, "%lg", &height);
     
     // Be prepared for the fact that the first line may be the header.
@@ -159,78 +167,144 @@ void load_csv(string const& file_name,
 
 }
 
+/// Compute the mean of an std::vector of doubles out to a length
 double calc_mean(vector<double> const& errs, int len){
+  if (len == 0) 
+    return 0;
   double mean = 0.0;
   for (int i = 0; i < len; i++){
     mean += errs[i];
   }
-  if (len == 0) return 0;
   return mean/len;
 }
+
+
+
+typedef InterpolationView< EdgeExtensionView< ImageViewRef< PixelMask<float> >, 
+                                        ConstantEdgeExtension>, 
+                           BilinearInterpolation> InterpolationReadyDem;
+
+/// Get ready to interpolate points on a DEM existing on disk.
+InterpolationReadyDem load_interpolation_ready_dem(std::string           const& dem_path,
+                                                   cartography::GeoReference  & georef) {
+  // Load the georeference from the DEM
+  bool is_good = cartography::read_georeference( georef, dem_path );
+  if (!is_good) 
+    vw_throw(ArgumentErr() << "DEM: " << dem_path << " does not have a georeference.\n");
+
+  // Set up file handle to the DEM and read the nodata value
+  DiskImageView<float> dem(dem_path);
+  double nodata = numeric_limits<double>::quiet_NaN();
+  boost::shared_ptr<DiskImageResource> dem_rsrc( new DiskImageResourceGDAL(dem_path) );
+  if (dem_rsrc->has_nodata_read()) 
+    nodata = dem_rsrc->nodata_read();
+
+  // Set up interpolation + mask view of the DEM
+  ImageViewRef< PixelMask<float> > masked_dem = create_mask(dem, nodata);
+  return InterpolationReadyDem(interpolate(masked_dem));
+}
+
+
+/// Interpolates the DEM height at the input coordinate.
+/// - Returns false if the coordinate falls outside the valid DEM area.
+bool interp_dem_height(InterpolationReadyDem         const & dem, 
+                       vw::cartography::GeoReference const & georef,
+                       vw::Vector3                   const & lonlat,
+                       double                              & dem_height) {
+  // Convert the lon/lat location into a pixel in the DEM.
+  vw::Vector2 pix = georef.lonlat_to_pixel(subvector(lonlat, 0, 2));
+  double c = pix[0], 
+         r = pix[1];
+         
+  // Quit if the pixel falls outside the DEM.
+  if (c < 0 || c >= dem.cols()-1 || // TODO: This ought to be an image class function
+      r < 0 || r >= dem.rows()-1 )
+    return false;
+
+  // Interpolate the DEM height at the pixel location
+  vw::PixelMask<float> v = dem(c, r);
+  if (!is_valid(v)) 
+    return false;
+    
+  dem_height = v.child();
+  return true;
+}
+
+/// As interp_dem_height but normalizes the longitude of input points.
+bool interp_dem_height_safe(InterpolationReadyDem         const & dem, 
+                            vw::cartography::GeoReference const & georef,
+                            double                        const & mean_dem_lon,
+                            vw::Vector3                   const & lonlat,
+                            double                              & dem_height) {
+  // Normalize the longitude to be within 360 degrees of the mean longitude
+  vw::Vector3 lonlat_adjusted(lonlat);
+  lonlat_adjusted[0] += 360.0*round((mean_dem_lon - lonlat[0])/360.0); // 360 deg adjustment
+  
+  return interp_dem_height(dem, georef, lonlat_adjusted, dem_height)
+}
+
+/// Computes the centroid lonlat point of a DEM
+Vector2 compute_dem_mean_lonlat(vw::cartography::GeoReference const & georef,
+                                int num_rows, int num_cols) {
+  Vector2 mean_dem_lonlat =
+    (georef.pixel_to_lonlat(Vector2(0, 0))
+     + georef.pixel_to_lonlat(Vector2(num_cols-1, 0))
+     + georef.pixel_to_lonlat(Vector2(0, num_rows-1)) 
+     + georef.pixel_to_lonlat(Vector2(num_cols-1, num_rows-1))
+     )/4.0;
+  return mean_dem_lonlat;
+}
+
+//----------------------------------------------------------------------------
 
 int main( int argc, char *argv[] ){
 
   Options opt;
   try {
     handle_arguments( argc, argv, opt );
-    
+
+    // Load the DEM and prepare it for interpolation
     cartography::GeoReference georef;
-    bool is_good = cartography::read_georeference( georef, opt.dem );
-    if (!is_good) vw_throw(ArgumentErr() << "DEM: " << opt.dem
-                           << " does not have a georeference.\n");
-
-    DiskImageView<float> dem(opt.dem);
-    double nodata = numeric_limits<double>::quiet_NaN();
-    boost::shared_ptr<DiskImageResource> dem_rsrc
-      ( new DiskImageResourceGDAL(opt.dem) );
-    if (dem_rsrc->has_nodata_read()) nodata = dem_rsrc->nodata_read();
-
-    ImageViewRef< PixelMask<float> > masked_dem = create_mask(dem, nodata);
-    InterpolationView<EdgeExtensionView< ImageViewRef < PixelMask<float> >, ConstantEdgeExtension>, BilinearInterpolation> masked_dem_interp = interpolate(masked_dem);
+    InterpolationReadyDem masked_dem_interp(load_interpolation_ready_dem(opt.dem, georef));
+    const int dem_num_rows = masked_dem_interp.rows();
+    const int dem_num_cols = masked_dem_interp.cols();
 
     // Find the mean longitude for the DEM points. This will be used to adjust
     // the longitude of csv file points if need be.
-    Vector2 mean_dem_lonlat =
-      (georef.pixel_to_lonlat(Vector2(0, 0))
-       + georef.pixel_to_lonlat(Vector2(dem.cols()-1, 0))
-       + georef.pixel_to_lonlat(Vector2(0, dem.rows()-1)) 
-       + georef.pixel_to_lonlat(Vector2(dem.cols()-1, dem.rows()-1))
-       )/4.0;
-    double mean_dem_lon = mean_dem_lonlat[0];
+    Vector2 mean_dem_lonlat = compute_dem_mean_lonlat(georef, dem_num_rows, dem_num_cols);
+    double  mean_dem_lon    = mean_dem_lonlat[0];
       
+    // Load the input CSV file into a vector of vectors
     vector<Vector3> lon_lat_height;
     load_csv(opt.csv, georef.datum(), lon_lat_height);
-    std::cout << "Loaded: " << lon_lat_height.size() << " points from "
-              << opt.csv << "." << std::endl;
+    std::cout << "Loaded: " << lon_lat_height.size() << " points from " << opt.csv << "." << std::endl;
 
+    // Loop through all of the input points
     double nan = numeric_limits<double>::quiet_NaN();
     vector<double> valid_errors, all_errors(lon_lat_height.size(), nan);
     for (int i = 0; i < (int)lon_lat_height.size(); i++){
 
       Vector3 llh = lon_lat_height[i];
-      llh[0] += 360.0*round((mean_dem_lon - llh[0])/360.0); // 360 deg adjustment
-      
-      Vector2 pix = georef.lonlat_to_pixel(subvector(llh, 0, 2));
-      double c = pix[0], r = pix[1];
-      if (c < 0 || c >= dem.cols()-1 || r < 0 ||
-          r >= dem.rows()-1 || dem(c, r) == nodata) continue;
-
-      PixelMask<float> v = masked_dem_interp(c, r);
-      if (! is_valid(v)) continue;
-      double err = std::abs(llh[2] - v.child());
+      double dem_height_here;
+      if (!interp_dem_height_safe(masked_dem_interp, georef, mean_dem_lon, llh, dem_height_here))
+        continue; // Skip if no DEM intersection
+        
+      // Compute and record the distance the input point height.
+      double err = std::abs(llh[2] - dem_height_here);
       valid_errors.push_back(err);
 
       all_errors[i] = err;
     }
 
     int len = valid_errors.size();
-    vw_out() << "Computed " << len << " valid vertical point to dem errors."
-             << std::endl;
+    vw_out() << "Computed " << len << " valid vertical point to dem errors." << std::endl;
+    if (len == 0) 
+      return 0;
 
+    // Sort the error vector to make computing percentiles easy
     sort(valid_errors.begin(), valid_errors.end());
-    if (len == 0) return 0;
 
-    // Stats
+    // Compute and display statistics
     double p16 = valid_errors[std::min(len-1, (int)round(len*0.16))];
     double p50 = valid_errors[std::min(len-1, (int)round(len*0.50))];
     double p84 = valid_errors[std::min(len-1, (int)round(len*0.84))];

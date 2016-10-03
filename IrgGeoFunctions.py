@@ -141,8 +141,6 @@ def getImageGeoInfo(imagePath, getStats=True):
         (maxX, minY) = brCoords
     outputDict['projection_bounds'] = (minX, maxX, minY, maxY)
 
-    
-
     # Get some proj4 values
     outputDict['standard_parallel_1'] = getGdalInfoTagValue(textOutput, 'standard_parallel_1')
     outputDict['central_meridian']    = getGdalInfoTagValue(textOutput, 'central_meridian')

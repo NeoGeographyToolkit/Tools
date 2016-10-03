@@ -63,12 +63,12 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 message("--------------------------------------------------------------")
 message("Searching for boost...")
 
-set(BOOST_ROOT "${BASESYSTEM_INSTALL_DIR}/include/boost-1_55")
+set(BOOST_ROOT "${BASESYSTEM_INSTALL_DIR}/include/boost-1_58")
 set(BOOST_LIBRARYDIR  "${BASESYSTEM_INSTALL_DIR}/lib")
-set(BOOST_INCLUDEDIR "${BASESYSTEM_INSTALL_DIR}/include/boost-1_55/boost")
+set(BOOST_INCLUDEDIR "${BASESYSTEM_INSTALL_DIR}/include/boost-1_58/boost")
 set(Boost_NO_SYSTEM_PATHS ON) #This does not seem to work
 #set(Boost_DEBUG 1) # Uncomment for useful finding boost debug output
-set(BOOST_MIN_VERSION "1.55.0")
+set(BOOST_MIN_VERSION "1.58.0")
 set(REQUIRED_BOOST_LIBS program_options system filesystem regex date_time thread iostreams)
 
 find_package(Boost ${BOOST_MIN_VERSION} REQUIRED COMPONENTS ${REQUIRED_BOOST_LIBS})
@@ -85,25 +85,25 @@ endif(Boost_FOUND)
 message("--------------------------------------------------------------")
 
 
-message("--------------------------------------------------------------")
-message("Searching for QT...")
-# TODO: Make sure this finds the correct install!
-set (QT_QMAKE_EXECUTABLE  ${BASESYSTEM_INSTALL_DIR}/bin/qmake)
-set (QT_MOC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/moc)
-set (QT_RCC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/rcc)
-set (QT_UIC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/uic)
-#SET(CMAKE_PREFIX_PATH ${BASESYSTEM_INSTALL_DIR} ${CMAKE_PREFIX_PATH}) 
-set(REQUIRED_QT_LIBS QtCore QtXml QtGui ) #TODO: Figure this out
-find_package(Qt4 4.8.5 REQUIRED ${REQUIRED_QT_LIBS})
+#message("--------------------------------------------------------------")
+#message("Searching for QT...")
+## TODO: Make sure this finds the correct install!
+#set (QT_QMAKE_EXECUTABLE  ${BASESYSTEM_INSTALL_DIR}/bin/qmake)
+#set (QT_MOC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/moc)
+#set (QT_RCC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/rcc)
+#set (QT_UIC_EXECUTABLE    ${BASESYSTEM_INSTALL_DIR}/bin/uic)
+##SET(CMAKE_PREFIX_PATH ${BASESYSTEM_INSTALL_DIR} ${CMAKE_PREFIX_PATH}) 
+#set(REQUIRED_QT_LIBS QtCore QtXml QtGui ) #TODO: Figure this out
+#find_package(Qt4 4.8.5 REQUIRED ${REQUIRED_QT_LIBS})
 
 
-if(Qt4_FOUND)
-    include(${QT_USE_FILE})
-    message("QT include dirs  " ${QT_INCLUDES})
-    #include_directories(${QT_INCLUDE_DIRS})
-    #link_directories(${QT_LIBRARY_DIR})
-endif(Qt4_FOUND)
-message("--------------------------------------------------------------")
+#if(Qt4_FOUND)
+#    include(${QT_USE_FILE})
+#    message("QT include dirs  " ${QT_INCLUDES})
+#    #include_directories(${QT_INCLUDE_DIRS})
+#    #link_directories(${QT_LIBRARY_DIR})
+#endif(Qt4_FOUND)
+#message("--------------------------------------------------------------")
 
 # Get NAIF includes (Needed for reading/writing SPICE data)
 set(NAIF_FOUND True)
@@ -188,76 +188,9 @@ target_link_libraries(pixelPairsFromStereo  ${VISIONWORKBENCH_LIBRARIES}  ${Ster
 add_executable(point_to_dem_dist point_to_dem_dist.cc) 
 target_link_libraries(point_to_dem_dist  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
 
-add_executable(dem_mean_std dem_mean_std.cc) 
-target_link_libraries(dem_mean_std  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
-
-add_executable(blur_dem blur_dem.cc) 
-target_link_libraries(blur_dem ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
-
 add_executable(demBlend demBlend.cc) 
 target_link_libraries(demBlend  ${VISIONWORKBENCH_LIBRARIES} ${StereoPipeline_LIBRARIES}) 
 
-# ASP Viewer ---------------------------------------------
+add_executable(mslSpiceParser mslSpiceParser.cc)
+target_link_libraries(mslSpiceParser  ${VISIONWORKBENCH_LIBRARIES}  ${StereoPipeline_LIBRARIES}) 
 
-# Source files
-SET( ASPVIEW_MOC_SRCS 
-  ASPView/gui/mainProg.cc ASPView/gui/aspView.cc ASPView/gui/appWindow.cc 
-  ASPView/gui/chooseFilesDlg.cc ASPView/gui/utils.cc 
-  ASPView/gui/documentation.cc
-)
-
-# Headers
-SET( ASPVIEW_MOC_HDRS
-  ASPView/gui/aspView.h ASPView/gui/appWindow.h ASPView/gui/chooseFilesDlg.h
-  ASPView/gui/utils.h 
-)
-
-# .ui files
-SET( ASPVIEW_UIS 
-)
-
-# A resource file
-SET( ASPVIEW_RCS
-  ASPView/gui/aspview.qrc
-  )
-
-#  Compiler flags
-ADD_DEFINITIONS( -Wall -O3 )
-
-# by default only QtCore and QtGui modules are enabled
-# other modules must be enabled like this:
-SET( QT_USE_QT3SUPPORT TRUE )   
-SET( QT_USE_QTXML TRUE )
-
-# this command finds Qt4 libraries and sets all required variables
-# note that it's Qt4, not QT4 or qt4
-#FIND_PACKAGE( Qt4 REQUIRED )
-
-# add some useful macros and variables (QT_USE_FILE is a variable
-# defined by FIND_PACKAGE( Qt4 ) that contains a path to CMake script)
-INCLUDE( ${QT_USE_FILE} )
-
-# this command will generate rules that will run rcc on all files from ASPVIEW_RCS
-# in result ASPVIEW_RC_SRCS variable will contain paths to files produced by rcc
-QT4_ADD_RESOURCES( ASPVIEW_RC_SRCS ${ASPVIEW_RCS} )
-
-# this will run uic on .ui files:
-QT4_WRAP_UI( ASPVIEW_UI_HDRS ${ASPVIEW_UIS} )
-
-# and finally this will run moc:
-QT4_WRAP_CPP( ASPVIEW_MOC_SRCS ${ASPVIEW_MOC_HDRS} )
-
-# we need this to be able to include headers produced by uic in our
-# code (CMAKE_BINARY_DIR holds a path to the build directory, while
-# INCLUDE_DIRECTORIES() works just like INCLUDEPATH from qmake)
-INCLUDE_DIRECTORIES( ${CMAKE_BINARY_DIR} )
-
-# here we instruct CMake to build "the aspview" executable from all of
-# the source files
-ADD_EXECUTABLE( aspview
-  ${ASPVIEW_MOC_SRCS} ${ASPVIEW_RC_SRCS}
-  ${ASPVIEW_MOC_HDRS} ${ASPVIEW_UI_HDRS} )
-
-# last thing we have to do is to tell CMake what libraries our executable needs,
-# luckily FIND_PACKAGE prepared QT_LIBRARIES variable for us:
-TARGET_LINK_LIBRARIES( aspview ${QT_LIBRARIES} ${VISIONWORKBENCH_LIBRARIES})
