@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
 
-# Process an entire run of icebrige images
+# Process an entire run of icebrige images. Multiple runs will be started in parallel.
+# Example usage:
+# python process_icebridge_run.py inputs/camera_files inputs/camera_files inputs/lidar \
+#   run_output/ --num-processes 4 --start-frame 658 --stop-frame 658 --use-sgm
 
 import os, sys, optparse, datetime, multiprocessing, time
 
-sys.path.insert(0, '/home/oalexan1/projects/StereoPipeline/src/asp/Python')
+sys.path.insert(0,  os.environ['HOME'] + '/projects/StereoPipeline/src/asp/Python')
 import asp_cmd_utils, asp_geo_utils
-
-
 
 # This block of code is just to get a non-blocking keyboard check!
 import signal
@@ -38,10 +39,8 @@ def processPair(imageA, imageB, cameraA, cameraB, lidarFolder,
 
     # Just set the options and call the pair python tool.
     # We can try out bundle adjustment for intrinsic parameters here.
-    # options = '' #'--bundle-adjust'
     cmd = ('python process_icebridge_pair.py --lidar-overlay --align-max-displacement 20 %s %s %s %s %s %s %s' 
            % (imageA, imageB, cameraA, cameraB, lidarFolder, outputFolder, options))
-    print("---now here!!!")
     asp_cmd_utils.executeCommand(cmd, None, suppressOutput, redo)
 
 def getFrameNumberFromFilename(f):
@@ -52,7 +51,7 @@ def getFrameNumberFromFilename(f):
 def main(argsIn):
 
     try:
-        usage = "usage: process_icebridge_run.py <image_folder> <camera_folder> <lidar_folder> <output_folder>[--help]\n  "
+        usage = 'usage: process_icebridge_run.py <image_folder> <camera_folder> <lidar_folder> <output_folder>[--help]\n  '
         parser = optparse.OptionParser(usage=usage)
 
         parser.add_option('--start-frame', dest='startFrame', default=-1,
@@ -60,22 +59,22 @@ def main(argsIn):
         parser.add_option('--stop-frame', dest='stopFrame', default=-1,
                           type='int', help='The frame number to finish processing with.')        
 
-        parser.add_option("--south", action="store_true", default=False, dest="isSouth",  
-                          help="MUST be set if the images are in the southern hemisphere")
+        parser.add_option('--south', action='store_true', default=False, dest='isSouth',  
+                          help='MUST be set if the images are in the southern hemisphere.')
 
-        parser.add_option("--shared-bundle", action="store_true", default=False, dest="sharedBundle",  
-                          help="Bundle adjust all cameras at once.")
+        parser.add_option('--shared-bundle', action='store_true', default=False, dest='sharedBundle',  
+                          help='Bundle adjust all cameras at once.')
 
         parser.add_option('--num-processes', dest='numProcesses', default=1,
                           type='int', help='The number of simultaneous processes to run.')
                           
-        parser.add_option("--nosgm", action="store_true", default=False, dest="nosgm",  
-                          help="If not to use SGM")
-        #parser.add_option("--lidar-overlay", action="store_true", default=False, dest="lidarOverlay",  
-        #                  help="Generate a lidar overlay for debugging")
+        parser.add_option('--use-sgm', action='store_true', default=False, dest='use_sgm',  
+                          help='If to use SGM.')
+        #parser.add_option('--lidar-overlay', action='store_true', default=False, dest='lidarOverlay',  
+        #                  help='Generate a lidar overlay for debugging')
 
-        #parser.add_option("--bundle_adjust", action="store_true", default=False, dest="bundleAdjust",  
-        #                  help="Run bundle adjustment between the two images")
+        #parser.add_option('--bundle_adjust', action='store_true', default=False, dest='bundleAdjust',  
+        #                  help='Run bundle adjustment between the two images')
 
         #parser.add_option('--num-threads', dest='numThreads', default=None,
         #                  type='int', help='The number of threads to use for processing.')
@@ -156,12 +155,7 @@ def main(argsIn):
     suppressOutput = False
     redo           = False
     baOutFile = baPrefix +'-'+ os.path.basename(cameraFiles[-1])
-
-    print("--cmd is ", cmd)
-    print("--ba file ", baOutFile)
-    
     asp_cmd_utils.executeCommand(cmd, baOutFile, suppressOutput, redo)
-    
     print 'Bundle adjustment finished!'
     
     # Generate a map of initial camera positions
@@ -208,22 +202,24 @@ def main(argsIn):
 
         print 'Processing frame number: ' + str(frameNumber)
         
-        # Check if the output file already exists.
+        extraOptions = ''
         thisOutputFolder = os.path.join(outputFolder, str(frameNumber))
+        if options.use_sgm:
+            extraOptions = '--use-sgm'
+            thisOutputFolder += '_sgm'
+        else:
+            thisOutputFolder += '_nosgm'
+            
+        # Check if the output file already exists.
         thisDemFile      = os.path.join(thisOutputFolder, 'DEM.tif')
         if os.path.exists(thisDemFile):
-          continue
+            print("Skipping frame as file exists: " + thisDemFile)
+            continue
           
         # Generate the command call
-        extraOptions = ''
-        if options.nosgm:
-            extraOptions = '--nosgm'
-
-        cmd = ('python process_icebridge_pair.py --lidar-overlay --align-max-displacement 20 %s %s %s %s %s %s %s' 
+        cmd = ('python process_icebridge_pair.py --lidar-overlay --align-max-displacement ' + \
+               '20 %s %s %s %s %s %s %s' 
                    % (imageA, imageB, cameraA, cameraB, lidarFolder, thisOutputFolder, extraOptions))
-        print("33---now here!!!")
-        print("will run " + " ".join(cmd))
-        
         taskHandles.append(pool.apply_async(processPair, 
             (imageA, imageB, cameraA, cameraB, lidarFolder, thisOutputFolder, extraOptions)))
             

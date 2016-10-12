@@ -7,7 +7,7 @@
 
 import os, sys, optparse, datetime
 
-sys.path.insert(0, '/home/oalexan1/projects/StereoPipeline/src/asp/Python')
+sys.path.insert(0,  os.environ['HOME'] + '/projects/StereoPipeline/src/asp/Python')
 import asp_cmd_utils, asp_geo_utils
 
 
@@ -77,20 +77,18 @@ def findMatchingLidarFile(imageFile, lidarFolder):
 
 def main(argsIn):
 
-    print("---now in process_icebridge_pair!!!")
-    
     try:
-        usage = "usage: process_icebridge_pair.py <imageA> <imageB> <cameraA> <cameraB> <lidar_folder> <output_folder>[--help]\n  "
+        usage = 'usage: process_icebridge_pair.py <imageA> <imageB> <cameraA> <cameraB> <lidar_folder> <output_folder>[--help]\n  '
         parser = optparse.OptionParser(usage=usage)
 
-        parser.add_option("--south", action="store_true", default=False, dest="isSouth",  
-                          help="MUST be set if the images are in the southern hemisphere")
+        parser.add_option('--south', action='store_true', default=False, dest='isSouth',  
+                          help='MUST be set if the images are in the southern hemisphere.')
                           
-        parser.add_option("--lidar-overlay", action="store_true", default=False, dest="lidarOverlay",  
-                          help="Generate a lidar overlay for debugging")
+        parser.add_option('--lidar-overlay', action='store_true', default=False, dest='lidarOverlay',  
+                          help='Generate a lidar overlay for debugging.')
 
-        parser.add_option("--bundle-adjust", action="store_true", default=False, dest="bundleAdjust",  
-                          help="Run bundle adjustment between the two images")
+        parser.add_option('--bundle-adjust', action='store_true', default=False, dest='bundleAdjust',  
+                          help='Run bundle adjustment between the two images.')
 
         parser.add_option('--num-threads', dest='numThreads', default=None,
                           type='int', help='The number of threads to use for processing.')
@@ -101,8 +99,11 @@ def main(argsIn):
         parser.add_option('--align-max-displacement', dest='maxDisplacement', default=20,
                           type='float', help='Max displacement value passed to pc_align.')
 
-        parser.add_option("--nosgm", action="store_true", default=False, dest="nosgm",  
-                          help="If not to use SGM.")
+        parser.add_option('--use-sgm', action='store_true', default=False, dest='use_sgm',  
+                          help='If to use SGM.')
+
+        parser.add_option('--use-pc-align', action='store_true', default=False, dest='use_pc_align',  
+                          help='If to use pc_align.')
 
         (options, args) = parser.parse_args(argsIn)
 
@@ -148,10 +149,7 @@ def main(argsIn):
 
     print '\nStarting processing...'
     
-    if not options.nosgm:
-        outputPrefix  = os.path.join(outputFolder, 'out')
-    else:
-        outputPrefix  = os.path.join(outputFolder, 'out_nosgm')
+    outputPrefix  = os.path.join(outputFolder, 'out')
         
     baseArgString = ('%s %s %s %s %s -t nadirpinhole --alignment-method epipolar' 
                      % (imageA, imageB, cameraA, cameraB, outputPrefix))
@@ -173,7 +171,7 @@ def main(argsIn):
     
     redo = False
 
-    if not options.nosgm:
+    if options.use_sgm:
         # PPRC
         cmd = ('stereo_pprc %s %s' % (baseArgString, threadText))
         pprcOutput = outputPrefix + '-L.tif'
@@ -209,30 +207,33 @@ def main(argsIn):
         asp_cmd_utils.executeCommand(cmd, triOutput, suppressOutput, redo)
 
         #raise Exception('DEBUG')
-    else:
+    else: # No SGM
+        #cmd = ('stereo %s %s --subpixel-mode 1 --corr-timeout 120' % (baseArgString, threadText))
         cmd = ('stereo %s %s --subpixel-mode 3' % (baseArgString, threadText))
-        pprcOutput = outputPrefix + '-PC.tif'
-        triOutput = pprcOutput
-        asp_cmd_utils.executeCommand(cmd, pprcOutput, suppressOutput, redo)
-        
-    # PC_ALIGN
-    if not options.nosgm:
-        alignPrefix = os.path.join(outputFolder, 'align/out')
-    else:
-        alignPrefix = os.path.join(outputFolder, 'align/out_nosgm')
-        
-    alignOptions = ('--max-displacement %f --csv-format %s --save-inv-transformed-reference-points' 
-                    % (options.maxDisplacement, csvFormatString))
-    cmd = ('pc_align %s %s %s -o %s %s' % (alignOptions, triOutput, lidarFile, alignPrefix, threadText))
-    alignOutput = alignPrefix+'-trans_reference.tif'
-    asp_cmd_utils.executeCommand(cmd, alignOutput, suppressOutput, redo)
+        triOutput = outputPrefix + '-PC.tif'
+        asp_cmd_utils.executeCommand(cmd, triOutput, suppressOutput, redo)
 
-    # POINT2DEM
+    # point2dem on the result of ASP
     cmd = ('point2dem --tr %lf --t_srs %s %s %s' 
-           % (options.demResolution, projString, alignOutput, threadText))
-    p2dOutput = alignPrefix+'-trans_reference-DEM.tif'
+           % (options.demResolution, projString, triOutput, threadText))
+    p2dOutput = outputPrefix + '-DEM.tif'
     asp_cmd_utils.executeCommand(cmd, p2dOutput, suppressOutput, redo)
-    
+
+    if options.use_pc_align:
+        # PC_ALIGN
+        alignPrefix = os.path.join(outputFolder, 'align/out')
+        alignOptions = ('--max-displacement %f --csv-format %s --save-inv-transformed-reference-points' 
+                        % (options.maxDisplacement, csvFormatString))
+        cmd = ('pc_align %s %s %s -o %s %s' % (alignOptions, triOutput, lidarFile, alignPrefix, threadText))
+        alignOutput = alignPrefix+'-trans_reference.tif'
+        asp_cmd_utils.executeCommand(cmd, alignOutput, suppressOutput, redo)
+        
+        # POINT2DEM on the aligned PC file
+        cmd = ('point2dem --tr %lf --t_srs %s %s %s' 
+               % (options.demResolution, projString, alignOutput, threadText))
+        p2dOutput = alignPrefix+'-trans_reference-DEM.tif'
+        asp_cmd_utils.executeCommand(cmd, p2dOutput, suppressOutput, redo)
+       
     # Create a symlink to the DEM in the main directory
     demSymlinkPath = os.path.join(outputFolder, 'DEM.tif')
     os.symlink(os.path.abspath(p2dOutput), demSymlinkPath)
@@ -277,9 +278,6 @@ def main(argsIn):
         asp_cmd_utils.executeCommand(cmd, colorOutput, suppressOutput, redo)
 
     print 'Finished!'
-
-
-
 
 # Run main function if file used from shell
 if __name__ == "__main__":
