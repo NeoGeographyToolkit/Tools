@@ -6,9 +6,12 @@
 # Generate a DEM for a single pair of icebridge images
 
 import os, sys, optparse, datetime
-
 sys.path.insert(0,  os.environ['HOME'] + '/projects/StereoPipeline/src/asp/Python')
-import asp_cmd_utils, asp_geo_utils
+
+# For sparse_disp
+os.environ["ASP_PYTHON_MODULES_PATH"] = os.environ['HOME'] + '/projects/BinaryBuilder/StereoPipelinePythonModules/lib64/python2.6/site-packages:' + os.environ['HOME'] + '/projects/BinaryBuilder/StereoPipelinePythonModules/lib64/python2.6/site-packages/GDAL-1.10.0-py2.6-linux-x86_64.egg/osgeo:' + os.environ['HOME'] + '/projects/BinaryBuilder/StereoPipelinePythonModules/lib'
+
+import asp_system_utils, asp_alg_utils, asp_geo_utils
 
 
 def parseDateTimeStrings(dateString, timeString):
@@ -102,7 +105,7 @@ def main(argsIn):
         parser.add_option('--use-sgm', action='store_true', default=False, dest='use_sgm',  
                           help='If to use SGM.')
 
-        parser.add_option('--use-pc-align', action='store_true', default=False, dest='use_pc_align',  
+        parser.add_option('--pc-align', action='store_true', default=False, dest='pc_align',  
                           help='If to use pc_align.')
 
         (options, args) = parser.parse_args(argsIn)
@@ -128,7 +131,7 @@ def main(argsIn):
     projString = PROJ_STRING_NORTH
     if options.isSouth:
         projString = PROJ_STRING_SOUTH
-    
+
     # Check the inputs
     for f in [imageA, imageB, cameraA, cameraB, lidarFolder]:   
         if not os.path.exists(f):
@@ -148,7 +151,7 @@ def main(argsIn):
     redo           = False
 
     print '\nStarting processing...'
-    
+
     outputPrefix  = os.path.join(outputFolder, 'out')
         
     baseArgString = ('%s %s %s %s %s -t nadirpinhole --alignment-method epipolar' 
@@ -164,18 +167,21 @@ def main(argsIn):
         bundlePrefix = os.path.join(outputFolder, 'bundle/out')
         cmd = ('bundle_adjust %s %s %s %s -o %s %s -t nadirpinhole --local-pinhole' 
                      % (imageA, imageB, cameraA, cameraB, bundlePrefix, threadText))
+        print(cmd)
         # Point to the new camera models
         cameraA = bundlePrefix +'-'+ os.path.basename(cameraA)
         cameraB = bundlePrefix +'-'+ os.path.basename(cameraB)
-        asp_cmd_utils.executeCommand(cmd, cameraA, suppressOutput, redo)
-    
-    redo = False
+        asp_system_utils.executeCommand(cmd, cameraA, suppressOutput, redo)
 
+        # Update the baseArgString
+        baseArgString = ('%s %s %s %s %s -t nadirpinhole --alignment-method epipolar' 
+                         % (imageA, imageB, cameraA, cameraB, outputPrefix))
+    
     if options.use_sgm:
         # PPRC
         cmd = ('stereo_pprc %s %s' % (baseArgString, threadText))
         pprcOutput = outputPrefix + '-L.tif'
-        asp_cmd_utils.executeCommand(cmd, pprcOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, pprcOutput, suppressOutput, redo)
 
         # CORR
         # - This should be single threaded to use the SGM processing.
@@ -186,62 +192,87 @@ def main(argsIn):
                                #+ ' --corr-blob-filter 100 --compute-low-res-disparity-only')
         cmd = ('stereo_corr %s %s ' % (correlationArgString, baseArgString))
         corrOutput = outputPrefix + '-D.tif'
-        asp_cmd_utils.executeCommand(cmd, corrOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, corrOutput, suppressOutput, redo)
 
         #raise Exception('DEBUG')
 
         # RFNE
         cmd = ('stereo_rfne --subpixel-mode 0 %s %s' % (baseArgString, threadText))
         rfneOutput = outputPrefix + '-RD.tif'
-        asp_cmd_utils.executeCommand(cmd, rfneOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, rfneOutput, suppressOutput, redo)
 
         # FLTR
-        filterArgString = '--rm-cleanup-passes 0 --median-filter-size 5 --texture-smooth-size 17 --texture-smooth-scale 0.14'
+        filterArgString = '--rm-cleanup-passes 0 --median-filter-size 5 ' + \
+                          '--texture-smooth-size 17 --texture-smooth-scale 0.14'
         cmd = ('stereo_fltr %s %s %s' % (filterArgString, baseArgString, threadText))
         fltrOutput = outputPrefix + '-F.tif'
-        asp_cmd_utils.executeCommand(cmd, fltrOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, fltrOutput, suppressOutput, redo)
 
         # TRI
         cmd = ('stereo_tri %s %s' % (baseArgString, threadText))
         triOutput = outputPrefix + '-PC.tif'
-        asp_cmd_utils.executeCommand(cmd, triOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, triOutput, suppressOutput, redo)
 
         #raise Exception('DEBUG')
     else: # No SGM
-        #cmd = ('stereo %s %s --subpixel-mode 1 --corr-timeout 120' % (baseArgString, threadText))
-        cmd = ('stereo %s %s --subpixel-mode 3' % (baseArgString, threadText))
+        cmd = ('stereo %s %s --corr-blob-filter 10000 --subpixel-mode 3 --corr-timeout 120' % \
+               (baseArgString, threadText))
+        
+        # Fine level control when using subpixel-mode 3. TODO: This
+        # needs to be done better.
+        #lOutput = outputPrefix + '-L.tif'
+        #asp_system_utils.executeCommand(cmd, lOutput, suppressOutput, redo)
+
+        #cmd = ('stereo -e 1 --stop-point 2 --compute-low-res-disparity-only %s %s --corr-max-levels 2 --corr-seed-mode 3 --subpixel-mode 3' % (baseArgString, threadText)) 
+        #dOutput = outputPrefix + '-D_sub.tif'
+        #asp_system_utils.executeCommand(cmd, dOutput, suppressOutput, redo)
+
+        #cmd = ('stereo_corr --skip-low-res-disparity-comp --corr-blob-filter 0 %s %s --corr-max-levels 2 --corr-seed-mode 3 --subpixel-mode 3' % (baseArgString, threadText))
+        #dOutput = outputPrefix + '-D.tif'
+        #asp_system_utils.executeCommand(cmd, dOutput, suppressOutput, redo)
+
+        #cmd = ('stereo -e 2 --skip-low-res-disparity-comp --corr-blob-filter 0 %s %s --corr-max-levels 2 --corr-seed-mode 3 --subpixel-mode 3' % (baseArgString, threadText))
+        
         triOutput = outputPrefix + '-PC.tif'
-        asp_cmd_utils.executeCommand(cmd, triOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, triOutput, suppressOutput, redo)
 
     # point2dem on the result of ASP
-    cmd = ('point2dem --tr %lf --t_srs %s %s %s' 
+    cmd = ('point2dem --tr %lf --t_srs %s %s %s --errorimage' 
            % (options.demResolution, projString, triOutput, threadText))
     p2dOutput = outputPrefix + '-DEM.tif'
-    asp_cmd_utils.executeCommand(cmd, p2dOutput, suppressOutput, redo)
+    asp_system_utils.executeCommand(cmd, p2dOutput, suppressOutput, redo)
 
-    if options.use_pc_align:
+    if options.pc_align:
         # PC_ALIGN
         alignPrefix = os.path.join(outputFolder, 'align/out')
-        alignOptions = ('--max-displacement %f --csv-format %s --save-inv-transformed-reference-points' 
-                        % (options.maxDisplacement, csvFormatString))
-        cmd = ('pc_align %s %s %s -o %s %s' % (alignOptions, triOutput, lidarFile, alignPrefix, threadText))
+        alignOptions = ( ('--max-displacement %f --csv-format %s ' +   \
+                          '--save-inv-transformed-reference-points') % \
+                         (options.maxDisplacement, csvFormatString))
+        cmd = ('pc_align %s %s %s -o %s %s' %
+               (alignOptions, triOutput, lidarFile, alignPrefix, threadText))
         alignOutput = alignPrefix+'-trans_reference.tif'
-        asp_cmd_utils.executeCommand(cmd, alignOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, alignOutput, suppressOutput, redo)
         
         # POINT2DEM on the aligned PC file
-        cmd = ('point2dem --tr %lf --t_srs %s %s %s' 
+        cmd = ('point2dem --tr %lf --t_srs %s %s %s --errorimage' 
                % (options.demResolution, projString, alignOutput, threadText))
         p2dOutput = alignPrefix+'-trans_reference-DEM.tif'
-        asp_cmd_utils.executeCommand(cmd, p2dOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, p2dOutput, suppressOutput, redo)
        
     # Create a symlink to the DEM in the main directory
     demSymlinkPath = os.path.join(outputFolder, 'DEM.tif')
+    print("ln -s " + os.path.abspath(p2dOutput) + " " + demSymlinkPath)
     os.symlink(os.path.abspath(p2dOutput), demSymlinkPath)
-    
+
+    cmd = ('geodiff --absolute --csv-format %s %s %s -o %s' % \
+           (csvFormatString, p2dOutput, lidarFile, outputPrefix))
+    print(cmd)
+    asp_system_utils.executeCommand(cmd, outputPrefix + "-diff.csv", suppressOutput, redo)
+
     # HILLSHADE
     hillOutput = outputPrefix+'-DEM_HILLSHADE.tif'
     cmd = 'hillshade ' + p2dOutput +' -o ' + hillOutput
-    asp_cmd_utils.executeCommand(cmd, hillOutput, suppressOutput, redo)
+    asp_system_utils.executeCommand(cmd, hillOutput, suppressOutput, redo)
     
     # COLORMAP
     colormapMin = -10
@@ -249,7 +280,7 @@ def main(argsIn):
     colorOutput = outputPrefix+'-DEM_CMAP.tif'
     cmd = ('colormap --min %f --max %f %s -o %s' 
            % (colormapMin, colormapMax, p2dOutput, colorOutput))
-    asp_cmd_utils.executeCommand(cmd, colorOutput, suppressOutput, redo)
+    asp_system_utils.executeCommand(cmd, colorOutput, suppressOutput, redo)
 
     if options.lidarOverlay:
         LIDAR_DEM_RESOLUTION     = 5
@@ -270,12 +301,12 @@ def main(argsIn):
                   LIDAR_DEM_RESOLUTION, projString, lidarFile, threadText, 
                   csvFormatString, lidarDemPrefix))
         lidarDemOutput = lidarDemPrefix+'-DEM.tif'
-        asp_cmd_utils.executeCommand(cmd, lidarDemOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, lidarDemOutput, suppressOutput, redo)
             
         colorOutput = lidarDemPrefix+'-DEM_CMAP.tif'
         cmd = ('colormap --min %f --max %f %s -o %s' 
                % (colormapMin, colormapMax, lidarDemOutput, colorOutput))
-        asp_cmd_utils.executeCommand(cmd, colorOutput, suppressOutput, redo)
+        asp_system_utils.executeCommand(cmd, colorOutput, suppressOutput, redo)
 
     print 'Finished!'
 

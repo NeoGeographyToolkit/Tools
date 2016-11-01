@@ -12,6 +12,10 @@ def main(argsIn):
         usage = "usage: generate_cameras_from_ortho.py <raw_folder> <ortho_folder> <camera_file>  <output_folder> [--help]\n  "
         parser = optparse.OptionParser(usage=usage)
 
+        # Note: The same reference DEM may not work for all images!
+        parser.add_option('--reference-dem', action='store', default="", dest='referenceDem',  
+                          type='string', help='Get the heights above the datum from this DEM.')
+        
         (options, args) = parser.parse_args(argsIn)
 
         if len(args) < 5:
@@ -24,8 +28,7 @@ def main(argsIn):
         outputFolder = args[4]
 
     except optparse.OptionError, msg:
-        raise Usage(msg)
-
+        raise Exception(msg)
     
     # Check the inputs
     if not os.path.exists(rawFolder):
@@ -65,8 +68,11 @@ def main(argsIn):
         # Set up the output paths
         outputString = count+'_'+date+'_'+time+'.tif'
         outputImagePath  = os.path.join(outputFolder,outputString)
-        outputCameraPath = outputImagePath.replace('.tif','.tsai')
-        
+        if (options.referenceDem != "") :
+            outputCameraPath = outputImagePath.replace('.tif','.dem.tsai')
+        else:
+            outputCameraPath = outputImagePath.replace('.tif','.tsai')
+
         if os.path.exists(outputCameraPath):
             print 'Output file ' + outputCameraPath + ' already exists, skipping it.'
             continue
@@ -98,6 +104,8 @@ def main(argsIn):
         # Generate the camera file
         tempCameraPath  = os.path.join(tempImageDir, count+'.tsai')
         cmd = ('ortho2pinhole ' +outputImagePath+' '+tempOrthoPath+' '+cameraFile+' '+tempCameraPath)
+        if (options.referenceDem != "") :
+            cmd += ' --reference-dem ' + options.referenceDem
         print cmd
         os.system(cmd)
         
@@ -106,20 +114,18 @@ def main(argsIn):
         cmd = 'convert_pinhole_model -o ' + outputCameraPath +' '+ outputImagePath +' '+ tempCameraPath
         print cmd
         os.system(cmd)
-        
+
         if os.path.exists(outputCameraPath):
             numWritten += 1
+            tempGcpPath = tempCameraPath + ".gcp"
+            outputGcpPath = outputCameraPath + ".gcp"
+            print("Writing GCP file: " + outputGcpPath)
+            shutil.copyfile(tempGcpPath, outputGcpPath)
 
     # Clean up the temporary ortho images
     os.system('rm -rf '+tempImageDir)
     
-    # TODO: Don't write these files!
-    os.system('rm *.match')
-            
     print 'Wrote ' + str(numWritten) +' output files.'
-
-
-
 
 # Run main function if file used from shell
 if __name__ == "__main__":

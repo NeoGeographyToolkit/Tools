@@ -4,12 +4,12 @@
 # Process an entire run of icebrige images. Multiple runs will be started in parallel.
 # Example usage:
 # python process_icebridge_run.py inputs/camera_files inputs/camera_files inputs/lidar \
-#   run_output/ --num-processes 4 --start-frame 658 --stop-frame 658 --use-sgm
+#   run_output --num-processes 4 --start-frame 658 --stop-frame 658 --use-sgm
 
 import os, sys, optparse, datetime, multiprocessing, time
-
 sys.path.insert(0,  os.environ['HOME'] + '/projects/StereoPipeline/src/asp/Python')
-import asp_cmd_utils, asp_geo_utils
+
+import asp_system_utils, asp_alg_utils, asp_geo_utils
 
 # This block of code is just to get a non-blocking keyboard check!
 import signal
@@ -39,9 +39,9 @@ def processPair(imageA, imageB, cameraA, cameraB, lidarFolder,
 
     # Just set the options and call the pair python tool.
     # We can try out bundle adjustment for intrinsic parameters here.
-    cmd = ('python process_icebridge_pair.py --lidar-overlay --align-max-displacement 20 %s %s %s %s %s %s %s' 
+    cmd = ('python process_icebridge_pair.py --lidar-overlay --align-max-displacement 100 %s %s %s %s %s %s %s' 
            % (imageA, imageB, cameraA, cameraB, lidarFolder, outputFolder, options))
-    asp_cmd_utils.executeCommand(cmd, None, suppressOutput, redo)
+    asp_system_utils.executeCommand(cmd, None, suppressOutput, redo)
 
 def getFrameNumberFromFilename(f):
     '''Return the frame number of an image or camera file'''
@@ -70,11 +70,22 @@ def main(argsIn):
                           
         parser.add_option('--use-sgm', action='store_true', default=False, dest='use_sgm',  
                           help='If to use SGM.')
+        parser.add_option('--interactive', action='store_true', default=False, dest='interactive',  
+                          help='If to wait on user input to terminate the jobs.')
         #parser.add_option('--lidar-overlay', action='store_true', default=False, dest='lidarOverlay',  
         #                  help='Generate a lidar overlay for debugging')
 
-        #parser.add_option('--bundle_adjust', action='store_true', default=False, dest='bundleAdjust',  
-        #                  help='Run bundle adjustment between the two images')
+        parser.add_option('--global-bundle-adjust', action='store_true', default=False,
+                          dest='globalBundleAdjust',  
+                          help='Run bundle adjustment between all the images.')
+
+        parser.add_option('--bundle-adjust', action='store_true', default=False,
+                          dest='bundleAdjust',  
+                          help='Run bundle adjustment between two consecutive images.')
+
+        parser.add_option('--pc-align', action='store_true', default=False,
+                          dest='pcAlign',  
+                          help='Run pc_align after stereo.')
 
         #parser.add_option('--num-threads', dest='numThreads', default=None,
         #                  type='int', help='The number of threads to use for processing.')
@@ -142,42 +153,42 @@ def main(argsIn):
         imageString  += image +' ' # Build strings for the bundle_adjust step
         cameraString += camera+' '
         
-
-    # TODO: Intrinsics???
-    # Bundle adjust all of the cameras
-    # - Could use an overlap of 4 but there is very little overlap at that point.
-    # - If we start dealing with crossover paths we can use the KML overlap method.
-    print 'Setting up bundle adjustment...'
-    baFolder = os.path.join(outputFolder, 'group_bundle')
-    baPrefix = os.path.join(baFolder,     'out')
-    cmd = ('bundle_adjust '+ imageString + cameraString 
-            + ' --overlap-limit 3 --local-pinhole --solve-intrinsics -o '+ baPrefix)
-    suppressOutput = False
-    redo           = False
-    baOutFile = baPrefix +'-'+ os.path.basename(cameraFiles[-1])
-    asp_cmd_utils.executeCommand(cmd, baOutFile, suppressOutput, redo)
-    print 'Bundle adjustment finished!'
-    
     # Generate a map of initial camera positions
     orbitvizBefore = os.path.join(outputFolder, 'cameras_in.kml')
-    orbitvizAfter  = os.path.join(outputFolder, 'cameras_post_ba.kml')
     vizString  = ''
     for (image, camera) in zip(imageFiles, cameraFiles): 
         vizString += image +' ' + camera+' '
     cmd = 'orbitviz --hide-labels -t nadirpinhole -r wgs84 -o '+ orbitvizBefore +' '+ vizString
-    asp_cmd_utils.executeCommand(cmd, orbitvizBefore, suppressOutput, redo)
+    asp_system_utils.executeCommand(cmd, orbitvizBefore, suppressOutput, redo)
 
-    # Update the list of camera files to the ba files
-    baOutFiles  = os.listdir(baFolder)
-    cameraFiles = [os.path.join(baFolder, f) for f in baOutFiles if '.tsai' in f]
-    cameraFiles.sort()
+    if options.globalBundleAdjust:
+        # TODO: Intrinsics???
+        # Bundle adjust all of the cameras
+        # - Could use an overlap of 4 but there is very little overlap at that point.
+        # - If we start dealing with crossover paths we can use the KML overlap method.
+        print 'Setting up bundle adjustment...'
+        baFolder = os.path.join(outputFolder, 'group_bundle')
+        baPrefix = os.path.join(baFolder,     'out')
+        cmd = ('bundle_adjust '+ imageString + cameraString 
+               + ' --overlap-limit 3 --local-pinhole --solve-intrinsics -o '+ baPrefix)
+        suppressOutput = False
+        redo           = False
+        baOutFile = baPrefix +'-'+ os.path.basename(cameraFiles[-1])
+        asp_system_utils.executeCommand(cmd, baOutFile, suppressOutput, redo)
+        print 'Bundle adjustment finished!'
+    
+        # Update the list of camera files to the ba files
+        baOutFiles  = os.listdir(baFolder)
+        cameraFiles = [os.path.join(baFolder, f) for f in baOutFiles if '.tsai' in f]
+        cameraFiles.sort()
 
-    # Generate a map of post-bundle_adjust camera positions
-    vizString  = ''
-    for (image, camera) in zip(imageFiles, cameraFiles): 
-        vizString += image +' ' + camera+' '
-    cmd = 'orbitviz --hide-labels -t nadirpinhole -r wgs84 -o '+ orbitvizAfter +' '+ vizString
-    asp_cmd_utils.executeCommand(cmd, orbitvizAfter, suppressOutput, redo)
+        # Generate a map of post-bundle_adjust camera positions
+        orbitvizAfter  = os.path.join(outputFolder, 'cameras_post_ba.kml')
+        vizString  = ''
+        for (image, camera) in zip(imageFiles, cameraFiles): 
+            vizString += image +' ' + camera+' '
+        cmd = 'orbitviz --hide-labels -t nadirpinhole -r wgs84 -o '+ orbitvizAfter +' '+ vizString
+        asp_system_utils.executeCommand(cmd, orbitvizAfter, suppressOutput, redo)
     
     print 'Starting processing pool with ' + str(options.numProcesses) +' processes.'
     pool = multiprocessing.Pool(options.numProcesses)
@@ -209,7 +220,13 @@ def main(argsIn):
             thisOutputFolder += '_sgm'
         else:
             thisOutputFolder += '_nosgm'
+
+        if options.bundleAdjust:
+            extraOptions += ' --bundle-adjust'
             
+        if options.bundleAdjust:
+            extraOptions += ' --pc-align'
+
         # Check if the output file already exists.
         thisDemFile      = os.path.join(thisOutputFolder, 'DEM.tif')
         if os.path.exists(thisDemFile):
@@ -220,6 +237,7 @@ def main(argsIn):
         cmd = ('python process_icebridge_pair.py --lidar-overlay --align-max-displacement ' + \
                '20 %s %s %s %s %s %s %s' 
                    % (imageA, imageB, cameraA, cameraB, lidarFolder, thisOutputFolder, extraOptions))
+        print(cmd)
         taskHandles.append(pool.apply_async(processPair, 
             (imageA, imageB, cameraA, cameraB, lidarFolder, thisOutputFolder, extraOptions)))
             
@@ -232,12 +250,18 @@ def main(argsIn):
     
     # Wait for all the tasks to complete
     while notReady > 0:
-        # Wait and see if the user presses a key
-        msg = 'Waiting on ' + str(notReady) + ' processes, press q<Enter> to abort...\n'
-        keypress = nonBlockingRawInput(prompt=msg, timeout=20)
-        if keypress == 'q':
-            print 'Recieved quit command!'
-            break
+        
+        if options.interactive:
+            # Wait and see if the user presses a key
+            msg = 'Waiting on ' + str(notReady) + ' process(es), press q<Enter> to abort...\n'
+            keypress = nonBlockingRawInput(prompt=msg, timeout=20)
+            if keypress == 'q':
+                print 'Recieved quit command!'
+                break
+        else:
+            print("Waiting on " + str(notReady) + ' process(es).')
+            time.sleep(5)
+            
         # Otherwise count up the tasks we are still waiting on.
         notReady = 0
         for task in taskHandles:
@@ -261,7 +285,7 @@ def main(argsIn):
     ## Point to the new camera models
     #cameraA = bundlePrefix +'-'+ os.path.basename(cameraA)
     #cameraB = bundlePrefix +'-'+ os.path.basename(cameraB)
-    #asp_cmd_utils.executeCommand(cmd, cameraA, suppressOutput, redo)
+    #asp_system_utils.executeCommand(cmd, cameraA, suppressOutput, redo)
 
 
 
