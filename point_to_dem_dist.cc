@@ -178,8 +178,6 @@ double calc_mean(vector<double> const& errs, int len){
   return mean/len;
 }
 
-
-
 typedef InterpolationView< EdgeExtensionView< ImageViewRef< PixelMask<float> >, 
                                         ConstantEdgeExtension>, 
                            BilinearInterpolation> InterpolationReadyDem;
@@ -257,6 +255,15 @@ Vector2 compute_dem_mean_lonlat(vw::cartography::GeoReference const & georef,
 
 //----------------------------------------------------------------------------
 
+double calc_rmse(vector<double> const& errs, int len){
+  double sum = 0.0;
+  for (int i = 0; i < len; i++){
+    sum += errs[i]*errs[i];
+  }
+  if (len == 0) return 0;
+  return std::sqrt(sum/len);
+}
+
 int main( int argc, char *argv[] ){
 
   Options opt;
@@ -281,7 +288,8 @@ int main( int argc, char *argv[] ){
 
     // Loop through all of the input points
     double nan = numeric_limits<double>::quiet_NaN();
-    vector<double> valid_errors, all_errors(lon_lat_height.size(), nan);
+    vector<double> valid_errors, all_dz(lon_lat_height.size(), nan), 
+                   all_v(lon_lat_height.size(), nan), all_err(lon_lat_height.size(), nan);
     for (int i = 0; i < (int)lon_lat_height.size(); i++){
 
       Vector3 llh = lon_lat_height[i];
@@ -293,7 +301,9 @@ int main( int argc, char *argv[] ){
       double err = std::abs(llh[2] - dem_height_here);
       valid_errors.push_back(err);
 
-      all_errors[i] = err;
+      all_v[i] = v.child();
+      all_dz[i] = dz;
+      all_err[i] = err;
     }
 
     int len = valid_errors.size();
@@ -312,17 +322,19 @@ int main( int argc, char *argv[] ){
              << " 16%: " << p16 << ", 50%: " << p50 << ", 84%: " << p84 << endl;
     double mean = calc_mean(valid_errors, len);
     vw_out() << "Mean error: " << mean << std::endl;
+    double rmse = calc_rmse(valid_errors, len);
+    vw_out() << "RMSE: " << rmse << std::endl;
 
     // Save the errors
-    std::string output_file = opt.output_prefix + "-errors.csv";
+    std::string output_file = opt.output_prefix + "-sample.csv";
     std::cout << "Writing: " << output_file << std::endl;
     ofstream outfile( output_file.c_str() );
-    outfile.precision(16);
-    outfile << "# latitude,longitude,height above datum (meters),vertical error(meters)" << endl;
+    outfile << "# lat,lon,z_mHAE,z_samp_mHAE,dz_m,abs_dz_m" << endl;
     for (int i = 0; i < (int)lon_lat_height.size(); i++){
       Vector3 llh = lon_lat_height[i];
-      outfile << llh[1] << ',' << llh[0] << ',' << llh[2]
-              << "," << all_errors[i] << endl;
+      outfile << std::setiosflags(ios::fixed) << std::setprecision(8) << llh[1] << ',' << llh[0] << ',' 
+              << std::setiosflags(ios::fixed) << std::setprecision(3) << llh[2]
+              << ',' << all_v[i] << ',' << all_dz[i] << ',' << all_err[i] << endl;
     }
     
   } ASP_STANDARD_CATCHES;
