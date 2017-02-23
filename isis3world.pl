@@ -2,7 +2,7 @@
 ###############################################################################
 #
 #_TITLE  isis3world.pl - Create a GIS detached header and/or GIS world file
-#                           for ISIS 3 image. ISIS 3 cubes must be exported to
+#                           for ISIS 3 image. ISIS 3 cubes should be exported to
 #                           a BSQ format or other format like TIFF or Jpeg.
 #                           The ISIS 3 cube will most
 #                           likely also need a new extension. This program
@@ -10,19 +10,19 @@
 #
 # Note this version does not need ISIS 3 installed to run
 #
-#  Pieces of code used are originally from Robert Herrick
+#  Pieces of code used are originally from Dr. Herrick
 #
 #_ARGS  
 #
 #_Parm  Output header bit types ( 8 or 16)
 #
-#_Parm  Output header/world formats - raw( hdr), tfw, gfw, jgw, pgw, cube(hdr), aux
+#_Parm  Output header/world formats - gxp (mhdr), raw( hdr), tfw, gfw, jgw, pgw, cube(hdr), aux
 #
 #_Parm  Input filename
 #
 #_USER  Command line entry options [optional parameters]:
 #
-#   isis3world.pl [-bit=8|16] [-r|-g|-t|-c|-j|-p|-P] input.cub
+#   isis3world.pl [-bit=8|16] [-r|-g|-t|-c|-j|-p|-P|-gxp] input.cub
 #
 # Requirements:
 #
@@ -44,6 +44,8 @@
 #
 #       2) Output Options:
 #                (-r) Generate a raw output header and world files
+#
+#                (-gxp) Generate a raw output header for Socet GXP
 #
 #                (-e) Generate a ERDAS raw output header and world files
 #
@@ -96,6 +98,10 @@
 #       Nov 30 2007 - T.H. - Added back in support for PCI Aux to simulate a 2 band
 #                            image as a 3 band for anaglyph conversion
 #       July 2 2009 - T.H. - Change Standard_Parallel_1 to latitude_of_origin for Polar Stereographic
+#       Mar 25 2015 - T.H. - Added GXP mhdr format
+#       May 18 2016 - T.H. - added support for multiple extensions
+#       Feb 23 2017 - T.H. - Updated Simple Cylindrical to force a sphere since that is what ISIS uses in
+#                                                the projection (for either ographic or ocentric).
 
 #FORMAT TILED
 #TILE WIDTH 64
@@ -115,8 +121,9 @@ use Math::Trig;
       print " \n\n          *** HELP ***\n\n";
       print "isis3world.pl -  Create GIS header and world files from an ISIS 3 cube\n\n";
       print "Command line: \n";
-      print "  isis3world.pl [-bit=8|16] [-r|-e|-g|-t|-c|-ji|-J|-p|-P] [-o=input.raw,8|16] input.cub\n";
+      print "  isis3world.pl [-bit=8|16] [-r|-e|-g|-t|-c|-ji|-J|-p|-P|-gxp] [-o=input.raw,8|16] input.cub\n";
       print "    -r = output raw header w/ georefencing (8, 16 bit)\n";
+      print "    -gxp = output Socet GXP header no georefencing and GIS worldfile (not used)\n";
       print "    -e = output ERDAS raw header and world file (8, 16, 32 bit)\n";
       print "    -g = output gif world file\n";
       print "    -t = output tif world file\n";
@@ -130,6 +137,7 @@ use Math::Trig;
       print "\n    -o = Override input ISIS3 file with raw file and change to 0 skipbytes\n";
 
       print "\nExamples:\n";
+      print "   Create header for SocetGXP: isis3world.pl -gxp input.cub\n";
       print "   Create header for 16 bit cube: isis3world.pl -bit=16 -r input.cub\n";
       print "   Create files for 32 bit ERDAS: isis3world.pl -e input.cub\n";
       print "   Create header for 32 bit PCI Aux: isis3world.pl -p input.cub\n";
@@ -146,8 +154,10 @@ use Math::Trig;
 #  Check input file name for .cub extention
 ######################################################################
 
-   @fname = split('\.',$input);
-   $root = $fname[0];
+   #@fname = split('\.',$input);
+   #$root = $fname[0];
+   (my $root = $input) =~ s/\.[^.]+$//;
+   #print "root";
 
    #  Create the header file from the bil file
    #print "$input";
@@ -157,7 +167,7 @@ use Math::Trig;
 #  Check for filetype if none then default to cube
 ######################################################################
 
-   if (!($t) && !($g) && !($j) && !($r) && !($c) && !($e) && !($p) && !($P) && !($J)) {
+   if (!($t) && !($g) && !($j) && !($r) && !($c) && !($e) && !($p) && !($P) && !($J) && !($gxp)) {
      $c = 1; 
    }
 
@@ -283,7 +293,7 @@ while (<INIMAGE>) {
             #Options 8u,16U,16S,32R
             $PCIitype = "8U";
             $nodata = $NULL1;
-            #Remap for PCI Aux
+            #Remap for PCI Aux and GXP
             $it = 1;
           }
           elsif ($it eq "SignedWord") {
@@ -291,7 +301,7 @@ while (<INIMAGE>) {
             $ERDASitype = "S16";
             $PCIitype = "16S";
             $nodata = $NULL2;
-            #Remap for PCI Aux
+            #Remap for PCI Aux and GXP
             $it = 2;
           }
           elsif ($it eq "Real") {
@@ -299,7 +309,7 @@ while (<INIMAGE>) {
             $ERDASitype = "F32";
             $PCIitype = "32R";
             $nodata = $NULL4;
-            #Remap for PCI Aux
+            #Remap for PCI Aux and GXP
             $it = 4;
           }
           else { 
@@ -320,14 +330,16 @@ while (<INIMAGE>) {
         $type = $tp[1];
         chomp $type;
         if ($type eq "Lsb") {
-               $machine = "I";
-               $ERDASmachine = "LSB";
-               $PCImachine = "Swapped";
+            $machine = "I";
+            $ERDASmachine = "LSB";
+            $PCImachine = "Swapped";
+            $GXPmachine = "0";
         }
         else {
             $machine = "M";
             $ERDASmachine = "MSB";
             $PCImachine = "Unswapped";
+            $GXPmachine = "1";
         }
      }
 
@@ -360,11 +372,13 @@ while (<INIMAGE>) {
      ##############################################################
      if (/EquatorialRadius/) {
         @a_axis = split(/ = /,$_) ;
-        $a_axis = @a_axis[1] * 1; #already in meters
+        $a_axis = @a_axis[1] * 1;
+        #$a_axis = $a_axis.replace("<meters>") * 1;
      }
      if (/PolarRadius/) {
         @c_axis = split(/ = /,$_) ;
-        $c_axis = @c_axis[1] * 1; #already in meters
+        $c_axis = @c_axis[1] * 1;
+        #$c_axis = $c_axis.replace("<meters>") * 1;
      }
      if (/CenterLongitude/) {
         @clon = split(/ = /,$_) ;
@@ -486,21 +500,21 @@ if ($o) {
     $ERDASitype = "U8";
     $PCIitype = "8U";
     $nodata = $NULL1;
-    #Remap for PCI Aux
+    #Remap for PCI Aux and GXP
     $it = 1;
   }
   elsif ($itype == 16) {
     $ERDASitype = "S16";
     $PCIitype = "16S";
     $nodata = $NULL2;
-    #Remap for PCI Aux
+    #Remap for PCI Aux and GXP
     $it = 2;
   }
   elsif ($itype == 32) {
     $ERDASitype = "F32";
     $PCIitype = "32R";
     $nodata = $NULL4;
-    #Remap for PCI Aux
+    #Remap for PCI Aux and GXP
     $it = 4;
   }
   else {
@@ -640,6 +654,58 @@ if ($o) {
     print OUTHDR "BYTE_ORDER $ERDASmachine\n";
     print OUTHDR "PIXEL_FILES $input\n";
     print OUTHDR "DATA_OFFSET $skipbytes\n";
+    close OUTHDR;
+
+
+    if (-e $outhdr)
+      {
+        print "\n Header file generated: $outhdr\n";
+      }
+    else
+     {
+       print "\n Header file not generated...something's wrong\n";
+       exit;
+     }
+   }
+
+####################################################################
+# Generate raw SOCET header (mhdr)
+####################################################################
+  if (($gxp))
+  {
+    ###############################################
+    # define header file 
+    ###############################################
+    $outhdr = $root.".mhdr";
+    #define WORLD file name 
+    #skipping for now. Information defined in keywords.lis (from ISIS3).
+    #$outworld = $root.".wld";
+
+
+    ###############################################
+    # write out header 
+    ###############################################
+    unlink ("$outhdr");
+
+    open OUTHDR, "> $outhdr ";
+    print OUTHDR "SOCET_GXP\n";
+    print OUTHDR "samples = $samples\n";
+    print OUTHDR "lines = $lines\n";
+    print OUTHDR "header offset = $skipbytes\n";
+    print OUTHDR "file type = ISIS3\n";
+    print OUTHDR "data type = $it\n"; 
+    print OUTHDR "interleave = BSQ\n";
+    print OUTHDR "byte order = $GXPmachine\n";
+    if ($format eq "Tile") {
+       print OUTHDR "tile lines = $tileLines\n";
+       print OUTHDR "tile samples = $tileSamples\n";
+    } else {
+       print OUTHDR "tile lines = 1\n";
+       print OUTHDR "tile samples = 1\n";
+    }
+    print OUTHDR "default bands = {}\n";
+    print OUTHDR "band names = {Unknown}\n";
+    print OUTHDR "bands = $bands\n\n";
     close OUTHDR;
 
 
@@ -815,6 +881,7 @@ if ($o) {
         #print $target;
         if (lc($projection) eq "sinusoidal") {
             $projection = "Sinusoidal";
+            #ISIS uses a spherical equation for this projection so force a sphere
             print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],UNIT[\"Meter\",1.0]]";
         }   
         elsif (lc($projection) eq "polarstereographic") {
@@ -822,34 +889,49 @@ if ($o) {
             if (($latType eq "None") || ($latType eq "Planetographic")) {
               print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."\",DATUM[\"D_".$target."\",SPHEROID[\"".$target."\",$a_axis,$flattening]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"latitude_of_origin\",$clat],UNIT[\"Meter\",1.0]]";
             } else {
+              #for ocentric latitude system use polar radius as a sphere
               print OUTPROJ "PROJCS[\"".$target."_".$projection."_Sphere\",GEOGCS[\"GCS_".$target."_Sphere_Polar\",DATUM[\"D_".$target."_Sphere_Polar\",SPHEROID[\"".$target."_Sphere_Polar\",$c_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"latitude_of_origin\",$clat],UNIT[\"Meter\",1.0]]";
             }
         }   
         elsif (lc($projection) eq "simplecylindrical") {
             $projection = "Equidistant_Cylindrical";
-            print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."\",DATUM[\"D_".$target."\",SPHEROID[\"".$target."\",$a_axis,$flattening]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",0.0],UNIT[\"Meter\",1.0]]";
+            #ISIS uses a spherical equation for this projection so force a sphere
+            print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."\",DATUM[\"D_".$target."\",SPHEROID[\"".$target."\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",0.0],UNIT[\"Meter\",1.0]]";
         }   
         elsif (lc($projection) eq "equirectangular") {
             $projection = "Equidistant_Cylindrical";
             if (($latType eq "None") || ($latType eq "Planetographic")) {
               print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."\",DATUM[\"D_".$target."\",SPHEROID[\"".$target."\",$a_axis,$flattening]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",$clat],UNIT[\"Meter\",1.0]]";
             } else {
+              #for ocentric latitude system use semi-major radius as a sphere. Note local radius was calculated above for this projection.
               print OUTPROJ "PROJCS[\"".$target."_".$projection."_Sphere\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",$clat],UNIT[\"Meter\",1.0]]";
             }
         }   
         elsif (lc($projection) eq "orthographic") {
             $projection = "Orthographic";
+            #ISIS uses a spherical equation for this projection so force a sphere
             print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],UNIT[\"Meter\",1.0]]";
+        }   
+        elsif (lc($projection) eq "stereographic") {
+            $projection = "Stereographic";
+            #ISIS uses a spherical equation for this projection so force a sphere
+            print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."\",DATUM[\"D_".$target."\",SPHEROID[\"".$target."\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Latitude_of_Origin\",0.0],PARAMETER[\"Scale_Factor\",1.0],UNIT[\"Meter\",1.0]]";
         }   
         elsif (lc($projection) eq "transversemercator") {
             $projection = "Transverse_Mercator";
-            print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Scale_Factor\",$scaleFactor],PARAMETER[\"Latitude_Of_Origin\",$clat],UNIT[\"Meter\",1.0]]";
+            if (($latType eq "None") || ($latType eq "Planetographic")) {
+              print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,$flattening]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Scale_Factor\",$scaleFactor],PARAMETER[\"Latitude_Of_Origin\",$clat],UNIT[\"Meter\",1.0]]";
+            } else {
+              #for ocentric latitude system use semi-major radius as a sphere
+              print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Scale_Factor\",$scaleFactor],PARAMETER[\"Latitude_Of_Origin\",$clat],UNIT[\"Meter\",1.0]]";
+            }
         }   
         elsif (lc($projection) eq "mercator") {
             $projection = "Mercator";
             if (($latType eq "None") || ($latType eq "Planetographic")) {
               print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."\",DATUM[\"D_".$target."\",SPHEROID[\"".$target."\",$a_axis,$flattening]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",$clat],UNIT[\"Meter\",1.0]]";
             } else {
+              #for ocentric latitude system use semi-major radius as a sphere
               print OUTPROJ "PROJCS[\"".$target."_".$projection."_Sphere\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",$clat],UNIT[\"Meter\",1.0]]";
             }
         }   
@@ -858,6 +940,7 @@ if ($o) {
             if (($latType eq "None") || ($latType eq "Planetographic")) {
               print OUTPROJ "PROJCS[\"".$target."_".$projection."\",GEOGCS[\"GCS_".$target."\",DATUM[\"D_".$target."\",SPHEROID[\"".$target."\",$a_axis,$flattening]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",$firstParallel],PARAMETER[\"Standard_Parallel_2\",$secondParallel],PARAMETER[\"Latitude_Of_Origin\",$clat],UNIT[\"Meter\",1.0]]";
             } else {
+              #for ocentric latitude system use semi-major radius as a sphere
               print OUTPROJ "PROJCS[\"".$target."_".$projection."_Sphere\",GEOGCS[\"GCS_".$target."_Sphere\",DATUM[\"D_".$target."_Sphere\",SPHEROID[\"".$target."_Sphere\",$a_axis,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"".$projection."\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",$clon],PARAMETER[\"Standard_Parallel_1\",$firstParallel],PARAMETER[\"Standard_Parallel_2\",$secondParallel],PARAMETER[\"Latitude_Of_Origin\",$clat],UNIT[\"Meter\",1.0]]";
             }
         }   
@@ -872,4 +955,5 @@ if ($o) {
         }
 
     }
+
 
