@@ -1,0 +1,3 @@
+Code used to upload IceBridge DEM and ortho image data to NSIDC along with browse files.  The required .jar files from SIPSMetGen have been removed, as has some information from the push.cfg files.  The main program which was run to upload data is oib_parallel_uploader.py and you can see the upload process by going through there.  Individual data sets sometimes needed individual attention to get ready for upload such as regenerating summary files.  This code was run from one of the LFE machines on the Pleiades supercomputer using tape archived IceBridge processing results.
+
+It is not expected that this code will be run again, but it could be a useful starting point for other NSIDC uploads.

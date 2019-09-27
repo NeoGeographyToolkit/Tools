@@ -1,0 +1,27 @@
+
+********************************************************************************
+***       This configuration file was created using the SIPSMetGen GUI       ***
+********************************************************************************
+
+*** Configuration Directories ***
+PreMet_Dir=/datapool/OPS/user/DP2/.ICEBRIDGE_INGEST/IODEM3/DEM/ScriptTest/DATADIR/
+Spatial_Dir=/datapool/OPS/user/DP2/.ICEBRIDGE_INGEST/IODEM3/DEM/ScriptTest/DATADIR/
+MET_Dir=/datapool/OPS/user/DP2/.ICEBRIDGE_INGEST/IODEM3/DEM/ScriptTest/DATADIR/
+PDR_Dir=/datapool/OPS/user/DP2/.ICEBRIDGE_INGEST/IODEM3/DEM/ScriptTest/DATADIR/
+
+
+*** Configuration Files ***
+MCF_File=/u/smcmich1/icebridge/upload_software/IODEM3#001.MCF
+Valids_File=/u/smcmich1/icebridge/upload_software/valids.cfg
+Push_File=/u/smcmich1/icebridge/upload_software/push.cfg
+
+*** Required Configuration Data ***
+Data_Dir=/datapool/OPS/user/DP2/.ICEBRIDGE_INGEST/IODEM3/DEM/ScriptTest/DATADIR/
+Data_Ext=.tif
+
+*** Optional Configuration Data ***
+
+*** Configuration Parameters ***
+SideLength=256
+MaxCellCount=300000
+AreaPercentage=5.0
