@@ -1,0 +1,29 @@
+
+********************************************************************************
+***       This configuration file was created using the SIPSMetGen GUI       ***
+********************************************************************************
+
+*** Configuration Directories ***
+PreMet_Dir=REPLACE/
+Spatial_Dir=REPLACE/
+MET_Dir=REPLACE/
+PDR_Dir=REPLACE/
+
+
+*** Configuration Files ***
+MCF_File=/u/smcmich1/icebridge/label_upload_software/MCF_REPLACE
+Valids_File=/u/smcmich1/icebridge/label_upload_software/valids.cfg
+Push_File=/u/smcmich1/icebridge/label_upload_software/PUSH_REPLACE
+
+*** Required Configuration Data ***
+Data_Dir=REPLACE/
+Data_Ext=.tif
+
+*** Optional Configuration Data ***
+
+*** Configuration Parameters ***
+SideLength=256
+MaxCellCount=300000
+AreaPercentage=5.0
+
+Browse_Req=N

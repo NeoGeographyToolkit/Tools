@@ -1,0 +1,52 @@
+#! /bin/ksh
+
+set -o monitor
+
+## Have to manually set the jdk path to something other than standard, since the standard on the machine is older than the version used to compile
+JAVA_HOME=/nasa/sun/jvm/10/jdk-10
+
+
+UTILITY_HOME=/u/smcmich1/icebridge/label_upload_software
+#UTILITY_HOME=/usr/ecs/TS1/CUSTOM/3_V3_MetGen
+
+export UTILITY_HOME
+SIPSMetGen=${UTILITY_HOME}/SIPSMetGen/SIPSMetGen.jar
+CONFIG_FILES=""
+PID=$$
+
+## do not use default umask of 002 - change to 022
+umask 022
+
+case $# in
+	2)
+	exec ${JAVA_HOME}/bin/java -Xmx2560m -DPID=$PID -DUTILITY_HOME=$UTILITY_HOME -jar ${SIPSMetGen} "$1" $2
+	;;
+
+	3)
+	exec ${JAVA_HOME}/bin/java -Xmx2560m -DPID=$PID -DUTILITY_HOME=$UTILITY_HOME -jar ${SIPSMetGen} "$1" $2 "$3"
+	;;
+
+	4)
+	exec ${JAVA_HOME}/bin/java -Xmx2560m -DPID=$PID -DUTILITY_HOME=$UTILITY_HOME -jar ${SIPSMetGen} "$1" $2 "$3" $4
+	;;
+
+	5)
+	exec ${JAVA_HOME}/bin/java -Xmx2560m -DPID=$PID -DUTILITY_HOME=$UTILITY_HOME -jar ${SIPSMetGen} "$1" $2 "$3" $4 "$5"
+	;;
+
+	6)
+	exec ${JAVA_HOME}/bin/java -Xmx2560m -DPID=$PID -DUTILITY_HOME=$UTILITY_HOME -jar ${SIPSMetGen} "$1" $2 "$3" $4 "$5" $6
+	;;
+	
+	7)
+	exec ${JAVA_HOME}/bin/java -Xmx2560m -DPID=$PID -DUTILITY_HOME=$UTILITY_HOME -jar ${SIPSMetGen} "$1" $2 "$3" $4 "$5" $6 "$7"
+	;;
+
+	8)
+	exec ${JAVA_HOME}/bin/java -Xmx2560m -DPID=$PID -DUTILITY_HOME=$UTILITY_HOME -jar ${SIPSMetGen} "$1" $2 "$3" $4 "$5" $6 "$7" $8
+	;;
+
+	*)
+	print "Usage: $0 [<data directory>] -config <configuration file> [-C <campaign short name>] [-P|-PO]" && exit
+esac
+

@@ -583,7 +583,7 @@ def uploadFolderToNSIDC(folder, remote_folder, logger):
 
     # Not using remote delete since we are pushing two local folders
     #  into a single remote folder.
-    auth = 'icebridge,OIBData restricted.ftp.nsidc.org'
+
     #cmd = ('lftp -e "mirror -P 20 -c -R -vvv --delete --delete-first ' + folder +
     #       ' ' + remoteDirPath + ' -i \'\.(tif|jpg|PDR|met)$\'; bye\" -u ' + auth)
     cmd = ('lftp -e "mirror -P 20 -c -R -vvv ' + folder +
