@@ -81,14 +81,16 @@ def upload_log_and_cleanup(label_folder, label_ortho_folder, unpack_folder,
     '''Called by the worker thread in UploadManager'''
 
     print 'Ready to upload folder ' + label_folder
-    print 'Ready to upload folder ' + label_ortho_folder
+    if label_ortho_folder is not None:
+        print 'Ready to upload folder ' + label_ortho_folder
     #return # DEBUG!!!!
 
     try:
         # Upload the data
         logger.info('Beginning data upload for flight ' + str(date))
-        uploadFolderToNSIDC(label_folder,       'labels/'  +remote_folder, logger) # TODO
-        uploadFolderToNSIDC(label_ortho_folder, 'label_ortho/'+remote_folder, logger)
+        uploadFolderToNSIDC(label_folder, 'labels/' +remote_folder, logger)
+        if label_ortho_folder is not None:
+            uploadFolderToNSIDC(label_ortho_folder, 'label_ortho/'+remote_folder, logger)
         logger.info('Data upload finished for flight ' + str(date))
 
         success = True
@@ -268,13 +270,17 @@ def unpackLabelTars(tarPath, unpack_folder, flight_title, logger):
     logger.info('Finished tar unpack command, looking for output files...')
     
     # Locate the two subfolders
-    for p in [label_folder, ortho_folder]:
-        if not os.path.exists(p):
-            raise Exception('Did not find unpack folder ' + p)
+    if not os.path.exists(label_folder):
+        raise Exception('Did not find unpack folder ' + label_folder)
+    if not os.path.exists(ortho_folder):
+        print('WARNING: Did not find unpack folder ' + ortho_folder)
+        label_ortho_files = []
+        ortho_folder = None
+    else:
+        label_ortho_files = getFolderFiles(ortho_folder, logger)
 
     # Check for bad files
-    label_files       = getFolderFiles(label_folder, logger)
-    label_ortho_files = getFolderFiles(ortho_folder, logger)
+    label_files = getFolderFiles(label_folder, logger)
     logger.info('Found ' + str(len(label_files)) +' label files and '
                 + str(len(label_ortho_files)) +' label ortho files.')
 
@@ -282,7 +288,6 @@ def unpackLabelTars(tarPath, unpack_folder, flight_title, logger):
 
 
 
-# TODO: Verify it works with label tarballs!
 def unpackTarAndGetFileList(tarPath, storage_folder, flight_title, logger, isSummary=False):
     '''Extract the tif files from a tarball into a specified folder.'''
 
@@ -446,6 +451,8 @@ def rename_files(folder, is_ortho):
 # RDSISC4_2017_04_11_00008_classified.tif
 # RDSISCO4_2017_04_11_00008_classified_ortho.tif
 
+    if folder is None: # Skip non-existant ortho folders
+        return
 
     if is_ortho:
     #    end = '_ortho.tif'
@@ -500,41 +507,66 @@ def makeConfigCopy(source_path, output_path, data_folder, isDim):
 
 
 
-def verifyMetadataFiles(folder, extensions, logger):
-   '''Raise an exception if all of the required metadata files for upload are not present'''
+def verifyMetadataFiles(label_folder, ortho_folder, extensions, logger):
+    '''Raise an exception if all of the required metadata files for upload are not present'''
 
-   new_files = os.listdir(folder)
-   counts = {}
-   counts['tif'] = 0
-   for e in extensions:
-       counts[e] = 0
+    label_files = os.listdir(label_folder)
+    if ortho_folder is None:
+        ortho_files = []
+    else:
+        ortho_files = os.listdir(ortho_folder)
+    counts = {}
+    counts['tif'] = 0
+    for e in extensions:
+        counts[e] = 0
 
-   for f in new_files: # Count up all the file extensions
-       (base, ext) = os.path.splitext(f)
-       base = os.path.join(folder, base)
+    missing_files = 0
+    for f in label_files: # Count up all the file extensions
+        (base, ext) = os.path.splitext(f)
 
-       if ext == '.tif':
-           counts['tif'] += 1
+        ortho_base = base.replace('RDSISC4', 'RDSISCO4').replace('classified', 'classified_ortho')
 
-           # For each TIF file, log if the other files are missing so
-           #  we can find the bad ones.
-           for e in extensions:
-               ePath = base + '.tif.' + e
+        base = os.path.join(label_folder, base)
+        if ortho_folder is not  None:
+            ortho_base = os.path.join(ortho_folder, ortho_base)
 
-               if not os.path.exists(ePath):
-                   logger.error('Missing output file: ' + ePath)
+        if ext == '.tif':
 
-       # Accumulate the proper extension
-       for e in extensions:
-           if ext == '.'+e:
-               counts[e] += 1
+            # Sometimes the ortho file is missing, that is ok
+            ortho_tif = ortho_base + '.tif'
+            ortho_present = os.path.exists(ortho_tif)
+            if not ortho_present:
+                logger.warning('WARNING: ortho tiff file missing: ' + ortho_tif)
 
-   # Make sure all the counts are the same
-   for e in extensions:
-       if counts['tif'] != counts[e]:
-           msg = ('Error: in folder ' + folder + ', counts = ' + str(counts))
-           logger.error(msg)
-           raise RuntimeError(msg)
+            counts['tif'] += 1
+
+            # For each TIF file, all of the associated files need to be there.
+            for e in extensions:
+                ePath = base       + '.tif.' + e
+                oPath = ortho_base + '.tif.' + e
+
+                if not os.path.exists(ePath):
+                    logger.error('Missing required label file: ' + ePath)
+                    missing_files += 1
+                if ortho_present and not os.path.exists(oPath):
+                    logger.error('Missing required ortho file: ' + oPath)
+                    missing_files += 1
+
+        # Accumulate the proper extension
+        for e in extensions:
+            if ext == '.'+e:
+                counts[e] += 1
+
+    # Make sure all the counts are the same
+    for e in extensions:
+        if counts['tif'] != counts[e]:
+            msg = ('Error: in folder ' + label_folder + ', counts = ' + str(counts))
+            logger.error(msg)
+            raise RuntimeError(msg)
+    if missing_files > 0:
+        msg = 'Number of missing required files = ' + str(missing_files)
+        logger.error(msg)
+        raise RuntimeError(msg)
 
 
 def runMetGen(configPath, campaign):
@@ -555,7 +587,7 @@ def uploadFolderToNSIDC(folder, remote_folder, logger):
 
     # Not using remote delete since we are pushing two local folders
     #  into a single remote folder.
-
+    auth = 'icebridge,OIBData restricted.ftp.nsidc.org'
     #cmd = ('lftp -e "mirror -P 20 -c -R -vvv --delete --delete-first ' + folder +
     #       ' ' + remoteDirPath + ' -i \'\.(tif|PDR|met|csv)$\'; bye\" -u ' + auth)
     cmd = ('lftp -e "mirror -P 20 -c -R -vvv ' + folder +
@@ -645,14 +677,14 @@ def main():
     if not dates_to_upload:
         print 'No dates to upload!'
 
-    dates_to_upload = [Date(2011,03,23)] # DEBUG
+    #dates_to_upload = [Date(2011,03,23)] # DEBUG
 
     # Start retrieving all of the files we will need from tape in the background.
     # - This takes a long time but it is more efficient to do all at once and
     #   we can start processing as soon as required files are finished.
     fetchTarballsFromTapes(this_campaign, dates_to_upload, logger)
 
-    NUM_PROCESSES = 1 # Number of parallel processes to run at once
+    NUM_PROCESSES = 4 # Number of parallel processes to run at once
     UPLOAD_LIMIT  = 1 # Upload this many flights before stopping.
     num_uploaded  = 0
 
@@ -673,6 +705,14 @@ def main():
 
         success = False
         try: # Make one attempt on a flight, we will have to manually check failures.
+
+            # Only used for certain flights without ortho data
+            kml_path_file = os.path.join(SOFTWARE_FOLDER, 'kml_path_files', str(date) + '.kml')
+            print 'Using kml file: ' + kml_path_file
+            if not os.path.exists(kml_path_file):
+                kml_path_file = None
+                raise Exception('FORCING KML FILE MISSING!')
+
 
             # Unpack the DEM and ORTHO tarballs into new folders.
             logger.info('Unpacking tarballs...')
@@ -700,7 +740,7 @@ def main():
             # Execute the RDSISC4_Parser.py script on each label file
             # - This will create some supporting files for each label file.
             # - Try a few times in case it fails.
-            MAX_NUM_TRIES = 1
+            MAX_NUM_TRIES = 2
             numTries = 0
             while numTries < MAX_NUM_TRIES:
                 try:
@@ -709,11 +749,11 @@ def main():
 
                     logger.info('Calling parallel_premet_maker...')
                     parallel_premet_maker.do_work(label_ortho_folder, 
-                                                  label_folder, NUM_PROCESSES)
+                                                  label_folder, kml_path_file, NUM_PROCESSES)
 
                     # Check that the preliminary files are all there.
-                    verifyMetadataFiles(label_folder,       ['spo', 'premet'], logger)
-                    verifyMetadataFiles(label_ortho_folder, ['spo', 'premet'], logger)
+                    print('Verifying premet files were created...')
+                    verifyMetadataFiles(label_folder, label_ortho_folder, ['spo', 'premet'], logger)
 
                 except RuntimeError as e:
                     logger.error(str(e))
@@ -736,7 +776,8 @@ def main():
             # Generate more metadata files
             logger.info('Launching MetGen.Start commands...')
             makeConfigCopy(PRIMARY_CONFIG_PATH, TEMP_CONFIG_PATH_LABEL, label_folder,       isDim=False)
-            makeConfigCopy(PRIMARY_CONFIG_PATH, TEMP_CONFIG_PATH_ORTHO, label_ortho_folder, isDim=True )
+            if label_ortho_folder is not None:
+                makeConfigCopy(PRIMARY_CONFIG_PATH, TEMP_CONFIG_PATH_ORTHO, label_ortho_folder, isDim=True )
 
             # This process sometimes randomly fails on a few frames, so re-run it
             #  in case this happens.
@@ -748,19 +789,20 @@ def main():
 
                     # This is a java tool so we run both instances in parallel.
                     labelMetGenProcess = multiprocessing.Process(target=runMetGen, args=(TEMP_CONFIG_PATH_LABEL, campaign_name))
-                    orthoMetGenProcess = multiprocessing.Process(target=runMetGen, args=(TEMP_CONFIG_PATH_ORTHO, campaign_name))
                     labelMetGenProcess.start()
-                    orthoMetGenProcess.start()
+                    if label_ortho_folder is not None:
+                        orthoMetGenProcess = multiprocessing.Process(target=runMetGen, args=(TEMP_CONFIG_PATH_ORTHO, campaign_name))
+                        orthoMetGenProcess.start()
+                        orthoMetGenProcess.join()
                     labelMetGenProcess.join()
-                    orthoMetGenProcess.join()
+
 
                     #runMetGen(TEMP_CONFIG_PATH_LABEL) # DEBUG
 
                     logger.info('MetGen processes are finished!')
 
                     # Check that we created all of the metadata files
-                    verifyMetadataFiles(label_folder,       ['PDR', 'met'], logger)
-                    verifyMetadataFiles(label_ortho_folder, ['PDR', 'met'], logger)
+                    verifyMetadataFiles(label_folder, label_ortho_folder, ['PDR', 'met'], logger)
                     # Throws RuntimeError on failure.
 
                     break # Quit the loop on success.

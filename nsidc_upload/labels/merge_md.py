@@ -48,17 +48,21 @@ def read_md_file(md_file):
     with open(md_file, 'r') as md:
         csv_reader = csv.reader(md)
         # Remove the header
-        next(csv_reader)
-        for row in csv_reader:
-            qa = float(row[0])
-            snow = float(row[1])
-            gray = float(row[2])
-            pond = float(row[3])
-            ocean = float(row[4])
-            try:
-                shadow = float(row[5])
-            except IndexError:
-                shadow = 0
+        try:
+            next(csv_reader)
+            for row in csv_reader:
+                qa = float(row[0])
+                snow = float(row[1])
+                gray = float(row[2])
+                pond = float(row[3])
+                ocean = float(row[4])
+                try:
+                    shadow = float(row[5])
+                except IndexError:
+                    shadow = 0
+        except Exception as e: # Make sure empty files don't crash the tool
+            print('Caught exception: ' + str(e))
+            print('File: ' + md_file)
 
     data = [frame, qa, snow, gray, pond, ocean, shadow]
 

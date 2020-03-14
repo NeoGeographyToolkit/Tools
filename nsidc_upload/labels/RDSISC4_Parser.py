@@ -143,9 +143,12 @@ inputfile = sys.argv[1]
 campaign=sys.argv[2]
 platform=sys.argv[3]
 aircraftid=sys.argv[4]
-openfile(inputfile)
-datestamp=parsedate()
-writespatial()
+
+openfile(inputfile) # Verify file exists
+datestamp=parsedate() # Needed for writepremet
+
+if 'RDSISCO' in inputfile: # Skip this for non-ortho files
+    writespatial() # Writes .spo file
 writepremet(campaign, platform, aircraftid)
 
 
